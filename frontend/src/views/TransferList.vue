@@ -70,25 +70,37 @@ const total = ref(0)
 const searchDeviceName = ref('')
 const searchOperator = ref('')
 
+// 请求序号：并发/重复搜索时仅采用最后一次请求的结果，保证结果、总数、加载状态一致
+let requestSeq = 0
+
 const formatTime = (time) => {
   if (!time) return ''
   return new Date(time).toLocaleString('zh-CN')
 }
 
 const loadTransfers = async () => {
+  const seq = ++requestSeq
   loading.value = true
   try {
     const params = {
       pageNum: pageNum.value,
       pageSize: pageSize.value
     }
+    const deviceName = searchDeviceName.value.trim()
+    const operator = searchOperator.value.trim()
+    if (deviceName) params.deviceName = deviceName
+    if (operator) params.operator = operator
     const result = await deviceApi.getAllTransferRecords(params)
-    transfers.value = result
-    total.value = result.length > 0 ? result.length * 10 : 0
+    if (seq !== requestSeq) return
+    transfers.value = result.records || []
+    total.value = result.total || 0
   } catch (error) {
+    if (seq !== requestSeq) return
     console.error('加载流转记录失败', error)
   } finally {
-    loading.value = false
+    if (seq === requestSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -99,6 +111,7 @@ const searchTransfers = () => {
 
 const handleSizeChange = (size) => {
   pageSize.value = size
+  pageNum.value = 1
   loadTransfers()
 }
 

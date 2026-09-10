@@ -294,14 +294,29 @@ public class DeviceServiceImpl implements DeviceService {
     }
 
     @Override
-    public List<TransferRecordVO> getAllTransferRecords(int pageNum, int pageSize) {
+    public IPage<TransferRecordVO> getAllTransferRecords(int pageNum, int pageSize, String deviceName, String operator) {
         Page<DeviceTransfer> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<DeviceTransfer> wrapper = new LambdaQueryWrapper<>();
+
+        // 设备名称不在流转表上，先按名称匹配设备ID再过滤流转记录
+        if (deviceName != null && !deviceName.trim().isEmpty()) {
+            LambdaQueryWrapper<Device> deviceWrapper = new LambdaQueryWrapper<>();
+            deviceWrapper.like(Device::getDeviceName, deviceName.trim());
+            List<Long> deviceIds = deviceMapper.selectList(deviceWrapper).stream()
+                    .map(Device::getId)
+                    .collect(Collectors.toList());
+            if (deviceIds.isEmpty()) {
+                return new Page<>(pageNum, pageSize);
+            }
+            wrapper.in(DeviceTransfer::getDeviceId, deviceIds);
+        }
+        if (operator != null && !operator.trim().isEmpty()) {
+            wrapper.like(DeviceTransfer::getOperator, operator.trim());
+        }
         wrapper.orderByDesc(DeviceTransfer::getTransferTime);
+
         IPage<DeviceTransfer> transferPage = transferMapper.selectPage(page, wrapper);
-        return transferPage.getRecords().stream()
-                .map(this::convertTransferToVO)
-                .collect(Collectors.toList());
+        return transferPage.convert(this::convertTransferToVO);
     }
 
     private DeviceVO convertToVO(Device device) {

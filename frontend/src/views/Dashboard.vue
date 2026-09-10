@@ -158,7 +158,7 @@ const loadStats = async () => {
       totalDevices: devices.length,
       totalFloors: floors.length,
       totalRooms: rooms.length,
-      totalTransfers: transfers.length
+      totalTransfers: transfers.total || 0
     }
 
     const statusCount = { 1: 0, 0: 0, 2: 0 }
@@ -172,7 +172,7 @@ const loadStats = async () => {
       { label: '待维修', count: statusCount[2], percent: Math.round(statusCount[2] / total * 100), color: '#e6a23c' }
     ]
 
-    recentTransfers.value = transfers.slice(0, 5)
+    recentTransfers.value = transfers.records || []
 
     const typeCount = {}
     devices.forEach(d => {

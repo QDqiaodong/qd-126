@@ -42,6 +42,19 @@ npm ci
 npm run build
 ```
 
+## 回归测试
+
+```bash
+cd backend
+mvn test
+```
+
+```bash
+cd frontend
+npm ci
+npm test
+```
+
 ## Docker 构建说明
 
 前端、后端 Dockerfile 均保留依赖层缓存；Docker Compose 使用 `.env` 中的固定端口，并绑定到 `127.0.0.1`，避免对外暴露和端口漂移。

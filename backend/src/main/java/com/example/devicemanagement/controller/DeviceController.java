@@ -113,10 +113,18 @@ public class DeviceController {
     }
 
     @GetMapping("/transfer-records")
-    public ApiResponse<List<TransferRecordVO>> getAllTransferRecords(
+    public ApiResponse<PageResponse<TransferRecordVO>> getAllTransferRecords(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        List<TransferRecordVO> records = deviceService.getAllTransferRecords(pageNum, pageSize);
-        return ApiResponse.success(records);
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String deviceName,
+            @RequestParam(required = false) String operator) {
+        IPage<TransferRecordVO> page = deviceService.getAllTransferRecords(pageNum, pageSize, deviceName, operator);
+        PageResponse<TransferRecordVO> response = PageResponse.of(
+                page.getRecords(),
+                page.getTotal(),
+                pageNum,
+                pageSize
+        );
+        return ApiResponse.success(response);
     }
 }

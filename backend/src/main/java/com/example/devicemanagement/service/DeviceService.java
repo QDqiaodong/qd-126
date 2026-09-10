@@ -42,5 +42,5 @@ public interface DeviceService {
 
     List<TransferRecordVO> getTransferHistory(Long deviceId);
 
-    List<TransferRecordVO> getAllTransferRecords(int pageNum, int pageSize);
+    IPage<TransferRecordVO> getAllTransferRecords(int pageNum, int pageSize, String deviceName, String operator);
 }
