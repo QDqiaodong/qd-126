@@ -16,9 +16,11 @@ import com.example.devicemanagement.entity.ReceptionRoom;
 import com.example.devicemanagement.mapper.DeviceMapper;
 import com.example.devicemanagement.mapper.DeviceTransferMapper;
 import com.example.devicemanagement.service.DeviceService;
+import com.example.devicemanagement.service.DeviceSpecValidator;
 import com.example.devicemanagement.service.FloorService;
 import com.example.devicemanagement.service.ReceptionRoomService;
 import com.example.devicemanagement.service.RedisCacheService;
+import com.example.devicemanagement.service.SpecTemplateService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +53,12 @@ public class DeviceServiceImpl implements DeviceService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private DeviceSpecValidator deviceSpecValidator;
+
+    @Autowired
+    private SpecTemplateService specTemplateService;
+
     @Override
     @Transactional
     public DeviceVO createDevice(DeviceCreateRequest request) {
@@ -60,8 +68,10 @@ public class DeviceServiceImpl implements DeviceService {
         device.setDeviceType(request.getDeviceType());
         device.setBrand(request.getBrand());
         device.setModel(request.getModel());
+        Map<String, Object> validatedSpec = deviceSpecValidator.validate(
+                request.getDeviceType(), request.getSpecJson());
         try {
-            device.setSpecJson(objectMapper.writeValueAsString(request.getSpecJson()));
+            device.setSpecJson(objectMapper.writeValueAsString(validatedSpec));
         } catch (JsonProcessingException e) {
             device.setSpecJson("{}");
         }
@@ -96,8 +106,10 @@ public class DeviceServiceImpl implements DeviceService {
         device.setBrand(request.getBrand());
         device.setModel(request.getModel());
         if (request.getSpecJson() != null) {
+            Map<String, Object> validatedSpec = deviceSpecValidator.validate(
+                    request.getDeviceType(), request.getSpecJson());
             try {
-                device.setSpecJson(objectMapper.writeValueAsString(request.getSpecJson()));
+                device.setSpecJson(objectMapper.writeValueAsString(validatedSpec));
             } catch (JsonProcessingException e) {
                 device.setSpecJson("{}");
             }
@@ -310,6 +322,9 @@ public class DeviceServiceImpl implements DeviceService {
         } else {
             vo.setSpecJson(new HashMap<>());
         }
+
+        // 含停用模板的字段定义，支撑历史设备详情按模板渲染
+        vo.setSpecFields(specTemplateService.getAnyStatusFields(device.getDeviceType()));
 
         vo.setImageUrl(device.getImageUrl());
         vo.setCurrentFloorId(device.getCurrentFloorId());

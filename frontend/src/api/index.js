@@ -14,6 +14,10 @@ request.interceptors.response.use(
     return res.data
   },
   error => {
+    const serverMessage = error.response?.data?.message
+    if (serverMessage) {
+      return Promise.reject(new Error(serverMessage))
+    }
     return Promise.reject(error)
   }
 )
@@ -50,4 +54,14 @@ export const deviceApi = {
   batchTransfer: data => request.post('/device/batch-transfer', data),
   getTransferHistory: deviceId => request.get(`/device/transfer-history/${deviceId}`),
   getAllTransferRecords: params => request.get('/device/transfer-records', { params })
+}
+
+export const specTemplateApi = {
+  getAll: () => request.get('/spec-template'),
+  getEnabled: () => request.get('/spec-template/enabled'),
+  getById: id => request.get(`/spec-template/${id}`),
+  getByType: deviceType => request.get(`/spec-template/type/${encodeURIComponent(deviceType)}`),
+  create: data => request.post('/spec-template', data),
+  update: (id, data) => request.put(`/spec-template/${id}`, data),
+  updateStatus: (id, status) => request.put(`/spec-template/${id}/status`, { status })
 }

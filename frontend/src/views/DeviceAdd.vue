@@ -23,12 +23,14 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="设备类型" required>
-              <el-select v-model="deviceForm.deviceType" placeholder="请选择设备类型">
-                <el-option label="电视" value="电视" />
-                <el-option label="音响" value="音响" />
-                <el-option label="麦克风" value="麦克风" />
-                <el-option label="投影仪" value="投影仪" />
-                <el-option label="其他" value="其他" />
+              <el-select
+                v-model="deviceForm.deviceType"
+                placeholder="请选择设备类型"
+                filterable
+                allow-create
+                @change="onTypeChange"
+              >
+                <el-option v-for="t in deviceTypeOptions" :key="t" :label="t" :value="t" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -103,19 +105,7 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="规格参数">
-          <div class="spec-form">
-            <el-button @click="addSpecItem" type="primary" size="small">
-              <el-icon><Plus /></el-icon>
-              添加参数
-            </el-button>
-            <div v-for="(item, index) in specItems" :key="index" class="spec-item">
-              <el-input v-model="item.key" placeholder="参数名称" class="spec-key" />
-              <el-input v-model="item.value" placeholder="参数值" class="spec-value" />
-              <el-button @click="removeSpecItem(index)" type="danger" size="small">删除</el-button>
-            </div>
-          </div>
-        </el-form-item>
+        <SpecFieldsEditor ref="specEditorRef" :fields="currentFields" :model-value="emptySpec" />
 
         <el-form-item label="创建人">
           <el-input v-model="deviceForm.createdBy" placeholder="请输入创建人" />
@@ -131,11 +121,13 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { deviceApi, floorApi, roomApi } from '../api'
+import { deviceApi, floorApi, roomApi, specTemplateApi } from '../api'
+import SpecFieldsEditor from '../components/SpecFieldsEditor.vue'
+
+const DEFAULT_TYPES = ['电视', '音响', '麦克风', '投影仪', '其他']
 
 const router = useRouter()
 
@@ -158,20 +150,36 @@ const deviceForm = reactive({
 const floors = ref([])
 const rooms = ref([])
 const imageFileList = ref([])
-const specItems = ref([{ key: '', value: '' }])
+const enabledTemplates = ref([])
+const specEditorRef = ref(null)
+const emptySpec = Object.freeze({})
+
+const templateMap = computed(() => {
+  const map = {}
+  enabledTemplates.value.forEach(t => {
+    map[t.deviceType] = t.fields || []
+  })
+  return map
+})
+
+const deviceTypeOptions = computed(() => {
+  const types = [...DEFAULT_TYPES]
+  enabledTemplates.value.forEach(t => {
+    if (!types.includes(t.deviceType)) {
+      types.push(t.deviceType)
+    }
+  })
+  return types
+})
+
+const currentFields = computed(() => templateMap.value[deviceForm.deviceType] || [])
 
 const goBack = () => {
   router.push('/device')
 }
 
-const addSpecItem = () => {
-  specItems.value.push({ key: '', value: '' })
-}
-
-const removeSpecItem = (index) => {
-  if (specItems.value.length > 1) {
-    specItems.value.splice(index, 1)
-  }
+const onTypeChange = () => {
+  // 字段定义切换后，SpecFieldsEditor 内部会按新模板重置规格值
 }
 
 const onFloorChange = async (floorId) => {
@@ -197,7 +205,7 @@ const handleBeforeUpload = (file) => {
   return true
 }
 
-const handleUploadSuccess = (response, file) => {
+const handleUploadSuccess = (response) => {
   deviceForm.imageUrl = response.data.url
 }
 
@@ -207,20 +215,19 @@ const submitForm = async () => {
     return
   }
 
-  const specJson = {}
-  specItems.value.forEach(item => {
-    if (item.key && item.value) {
-      specJson[item.key] = item.value
-    }
-  })
-  deviceForm.specJson = specJson
+  const specError = specEditorRef.value ? specEditorRef.value.validate() : ''
+  if (specError) {
+    ElMessage.warning(specError)
+    return
+  }
+  deviceForm.specJson = specEditorRef.value ? specEditorRef.value.getSpecJson() : {}
 
   try {
     await deviceApi.create(deviceForm)
     ElMessage.success('设备添加成功')
     router.push('/device')
   } catch (error) {
-    ElMessage.error('设备添加失败')
+    ElMessage.error(error.message || '设备添加失败')
   }
 }
 
@@ -232,7 +239,18 @@ const loadFloors = async () => {
   }
 }
 
-loadFloors()
+const loadTemplates = async () => {
+  try {
+    enabledTemplates.value = await specTemplateApi.getEnabled()
+  } catch (error) {
+    console.error('加载规格模板失败', error)
+  }
+}
+
+onMounted(() => {
+  loadFloors()
+  loadTemplates()
+})
 </script>
 
 <style scoped>
@@ -266,19 +284,5 @@ loadFloors()
 .preview-image img {
   max-width: 100%;
   border-radius: 4px;
-}
-
-.spec-form {
-  margin-top: 10px;
-}
-
-.spec-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.spec-key, .spec-value {
-  width: 200px;
 }
 </style>

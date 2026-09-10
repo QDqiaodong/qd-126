@@ -23,12 +23,14 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="设备类型" required>
-              <el-select v-model="deviceForm.deviceType" placeholder="请选择设备类型">
-                <el-option label="电视" value="电视" />
-                <el-option label="音响" value="音响" />
-                <el-option label="麦克风" value="麦克风" />
-                <el-option label="投影仪" value="投影仪" />
-                <el-option label="其他" value="其他" />
+              <el-select
+                v-model="deviceForm.deviceType"
+                placeholder="请选择设备类型"
+                filterable
+                allow-create
+                @change="onTypeChange"
+              >
+                <el-option v-for="t in deviceTypeOptions" :key="t" :label="t" :value="t" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -103,19 +105,13 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="规格参数">
-          <div class="spec-form">
-            <el-button @click="addSpecItem" type="primary" size="small">
-              <el-icon><Plus /></el-icon>
-              添加参数
-            </el-button>
-            <div v-for="(item, index) in specItems" :key="index" class="spec-item">
-              <el-input v-model="item.key" placeholder="参数名称" class="spec-key" />
-              <el-input v-model="item.value" placeholder="参数值" class="spec-value" />
-              <el-button @click="removeSpecItem(index)" type="danger" size="small">删除</el-button>
-            </div>
-          </div>
-        </el-form-item>
+        <SpecFieldsEditor
+          ref="specEditorRef"
+          :fields="currentFields"
+          :model-value="currentSpec"
+          :enforce-required="templateEnabled"
+          :disabled-hint="templateDisabledHint"
+        />
 
         <el-form-item>
           <el-button @click="goBack">取消</el-button>
@@ -127,11 +123,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { deviceApi, floorApi, roomApi } from '../api'
+import { deviceApi, floorApi, roomApi, specTemplateApi } from '../api'
+import SpecFieldsEditor from '../components/SpecFieldsEditor.vue'
+
+const DEFAULT_TYPES = ['电视', '音响', '麦克风', '投影仪', '其他']
 
 const router = useRouter()
 const route = useRoute()
@@ -157,20 +155,65 @@ const deviceForm = reactive({
 const floors = ref([])
 const rooms = ref([])
 const imageFileList = ref([])
-const specItems = ref([{ key: '', value: '' }])
+const enabledTemplates = ref([])
+const deviceSpecFields = ref([])
+const specEditorRef = ref(null)
+
+const enabledMap = computed(() => {
+  const map = {}
+  enabledTemplates.value.forEach(t => {
+    map[t.deviceType] = t.fields || []
+  })
+  return map
+})
+
+const deviceTypeOptions = computed(() => {
+  const types = [...DEFAULT_TYPES]
+  enabledTemplates.value.forEach(t => {
+    if (!types.includes(t.deviceType)) {
+      types.push(t.deviceType)
+    }
+  })
+  return types
+})
+
+// 当前选中类型启用中则用启用模板；否则回退设备自身携带的字段定义（可能来自已停用模板）
+const currentFields = computed(() => {
+  const enabled = enabledMap.value[deviceForm.deviceType]
+  if (enabled && enabled.length > 0) {
+    return enabled
+  }
+  if (deviceForm.deviceType === originalDeviceType.value) {
+    return deviceSpecFields.value || []
+  }
+  return []
+})
+
+const templateEnabled = computed(() => {
+  const enabled = enabledMap.value[deviceForm.deviceType]
+  return !!(enabled && enabled.length > 0)
+})
+
+const templateDisabledHint = computed(() => {
+  if (currentFields.value.length > 0 && !templateEnabled.value) {
+    return '该设备类型的规格模板已停用，历史规格仍可查看与修改，但不再强制必填。'
+  }
+  return ''
+})
+
+// 切换类型后规格值重置（不同类型字段不同）；未切换时回显设备已有规格
+const originalDeviceType = ref('')
+const EMPTY_SPEC = Object.freeze({})
+const currentSpec = computed(() => {
+  return deviceForm.deviceType === originalDeviceType.value ? deviceForm.specJson : EMPTY_SPEC
+})
 
 const goBack = () => {
   router.push('/device')
 }
 
-const addSpecItem = () => {
-  specItems.value.push({ key: '', value: '' })
-}
-
-const removeSpecItem = (index) => {
-  if (specItems.value.length > 1) {
-    specItems.value.splice(index, 1)
-  }
+const onTypeChange = () => {
+  // SpecFieldsEditor 监听 fields/modelValue 变化自动重置
 }
 
 const onFloorChange = async (floorId) => {
@@ -196,7 +239,7 @@ const handleBeforeUpload = (file) => {
   return true
 }
 
-const handleUploadSuccess = (response, file) => {
+const handleUploadSuccess = (response) => {
   deviceForm.imageUrl = response.data.url
 }
 
@@ -207,6 +250,7 @@ const loadDevice = async () => {
     deviceForm.deviceCode = device.deviceCode
     deviceForm.deviceName = device.deviceName
     deviceForm.deviceType = device.deviceType
+    originalDeviceType.value = device.deviceType
     deviceForm.brand = device.brand
     deviceForm.model = device.model
     deviceForm.imageUrl = device.imageUrl
@@ -215,16 +259,8 @@ const loadDevice = async () => {
     deviceForm.status = device.status
     deviceForm.purchaseDate = device.purchaseDate
     deviceForm.warrantyEndDate = device.warrantyEndDate
-
-    specItems.value = []
-    if (device.specJson && typeof device.specJson === 'object') {
-      Object.entries(device.specJson).forEach(([key, value]) => {
-        specItems.value.push({ key, value: String(value) })
-      })
-    }
-    if (specItems.value.length === 0) {
-      specItems.value.push({ key: '', value: '' })
-    }
+    deviceForm.specJson = device.specJson || {}
+    deviceSpecFields.value = device.specFields || []
 
     if (device.currentFloorId) {
       rooms.value = await roomApi.getByFloor(device.currentFloorId)
@@ -242,20 +278,19 @@ const submitForm = async () => {
     return
   }
 
-  const specJson = {}
-  specItems.value.forEach(item => {
-    if (item.key && item.value) {
-      specJson[item.key] = item.value
-    }
-  })
-  deviceForm.specJson = specJson
+  const specError = specEditorRef.value ? specEditorRef.value.validate() : ''
+  if (specError) {
+    ElMessage.warning(specError)
+    return
+  }
+  deviceForm.specJson = specEditorRef.value ? specEditorRef.value.getSpecJson() : {}
 
   try {
     await deviceApi.update(deviceId.value, deviceForm)
     ElMessage.success('设备更新成功')
     router.push('/device')
   } catch (error) {
-    ElMessage.error('设备更新失败')
+    ElMessage.error(error.message || '设备更新失败')
   }
 }
 
@@ -267,8 +302,17 @@ const loadFloors = async () => {
   }
 }
 
+const loadTemplates = async () => {
+  try {
+    enabledTemplates.value = await specTemplateApi.getEnabled()
+  } catch (error) {
+    console.error('加载规格模板失败', error)
+  }
+}
+
 onMounted(() => {
   loadFloors()
+  loadTemplates()
   loadDevice()
 })
 </script>
@@ -304,19 +348,5 @@ onMounted(() => {
 .preview-image img {
   max-width: 100%;
   border-radius: 4px;
-}
-
-.spec-form {
-  margin-top: 10px;
-}
-
-.spec-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.spec-key, .spec-value {
-  width: 200px;
 }
 </style>

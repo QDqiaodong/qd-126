@@ -42,6 +42,11 @@ const routes = [
     component: () => import('../views/TransferList.vue')
   },
   {
+    path: '/spec-template',
+    name: 'SpecTemplateList',
+    component: () => import('../views/SpecTemplateList.vue')
+  },
+  {
     path: '/grouped',
     name: 'GroupedView',
     component: () => import('../views/GroupedView.vue')

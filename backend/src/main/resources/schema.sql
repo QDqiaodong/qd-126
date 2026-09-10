@@ -45,6 +45,29 @@ CREATE TABLE IF NOT EXISTS `device` (
     INDEX `idx_current_room` (`current_room_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备表';
 
+CREATE TABLE IF NOT EXISTS `device_spec_template` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '规格模板ID',
+    `device_type` VARCHAR(50) NOT NULL UNIQUE COMMENT '设备类型 电视/音响/麦克风/投影仪/其他',
+    `status` TINYINT DEFAULT 1 COMMENT '状态 1启用 0停用',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备类型规格模板表';
+
+CREATE TABLE IF NOT EXISTS `device_spec_field` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '规格字段ID',
+    `template_id` BIGINT NOT NULL COMMENT '所属规格模板ID',
+    `field_key` VARCHAR(100) NOT NULL COMMENT '字段键',
+    `field_label` VARCHAR(100) NOT NULL COMMENT '字段名称',
+    `field_type` VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT '字段类型 text/textarea/number/select/date/boolean',
+    `required` TINYINT NOT NULL DEFAULT 0 COMMENT '是否必填 1是 0否',
+    `options` TEXT DEFAULT NULL COMMENT '可选项JSON，仅select使用',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY `uk_template_field` (`template_id`, `field_key`),
+    INDEX `idx_template_id` (`template_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备规格模板字段表';
+
 CREATE TABLE IF NOT EXISTS `device_transfer` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '流转记录ID',
     `device_id` BIGINT NOT NULL COMMENT '设备ID',
@@ -61,3 +84,31 @@ CREATE TABLE IF NOT EXISTS `device_transfer` (
     INDEX `idx_device_id` (`device_id`),
     INDEX `idx_transfer_time` (`transfer_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备流转记录表';
+
+-- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
+INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
+    (1, '电视', 1),
+    (2, '音响', 1),
+    (3, '麦克风', 1),
+    (4, '投影仪', 1);
+
+INSERT IGNORE INTO `device_spec_field`
+    (`id`, `template_id`, `field_key`, `field_label`, `field_type`, `required`, `options`, `sort_order`) VALUES
+    (1,  1, 'screenSize',   '屏幕尺寸',   'number',   1, NULL, 1),
+    (2,  1, 'resolution',   '分辨率',     'select',   1, '["720P","1080P","2K","4K","8K"]', 2),
+    (3,  1, 'panelType',    '面板类型',   'select',   0, '["LCD","LED","OLED","QLED","Mini-LED"]', 3),
+    (4,  1, 'smartSystem',  '智能系统',   'text',     0, NULL, 4),
+    (5,  1, 'hasHdmi',      '是否有HDMI', 'boolean',  0, NULL, 5),
+    (6,  2, 'power',        '功率(W)',    'number',   1, NULL, 1),
+    (7,  2, 'channel',      '声道',       'select',   1, '["2.0","2.1","5.1","7.1"]', 2),
+    (8,  2, 'connection',   '连接方式',   'select',   0, '["有线","蓝牙","有线+蓝牙"]', 3),
+    (9,  2, 'frequencyRange','频率范围',  'text',     0, NULL, 4),
+    (10, 3, 'pickupPattern','指向性',     'select',   1, '["全指向","单指向","双指向"]', 1),
+    (11, 3, 'wireless',     '是否无线',   'boolean',  1, NULL, 2),
+    (12, 3, 'batteryLife',  '续航时长(小时)','number',0, NULL, 3),
+    (13, 3, 'interfaceType','接口类型',   'select',   0, '["USB","3.5mm","XLR卡侬","6.35mm"]', 4),
+    (14, 4, 'brightness',   '亮度(流明)', 'number',   1, NULL, 1),
+    (15, 4, 'resolution',   '分辨率',     'select',   1, '["SVGA","XGA","1080P","4K"]', 2),
+    (16, 4, 'throwRatio',   '投射比',     'text',     0, NULL, 3),
+    (17, 4, 'lampLife',     '灯泡寿命(小时)','number',0, NULL, 4),
+    (18, 4, 'wirelessScreen','是否支持无线投屏','boolean',0, NULL, 5);

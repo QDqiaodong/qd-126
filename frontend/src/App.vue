@@ -31,6 +31,10 @@
             <el-icon><RefreshLeft /></el-icon>
             <span>流转记录</span>
           </el-menu-item>
+          <el-menu-item index="/spec-template">
+            <el-icon><Tickets /></el-icon>
+            <span>规格模板</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-container>
@@ -54,7 +58,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu } from '@element-plus/icons-vue'
+import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -73,6 +77,7 @@ const titleMap = {
   '/floor': '楼层管理',
   '/room': '接待室管理',
   '/transfer': '流转记录',
+  '/spec-template': '设备规格模板管理',
   '/grouped': '楼层分组视图'
 }
 

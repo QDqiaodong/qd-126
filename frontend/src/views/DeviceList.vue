@@ -5,11 +5,7 @@
         <div class="search-bar">
           <el-input v-model="searchDeviceName" placeholder="设备名称" class="search-input" clearable />
           <el-select v-model="searchDeviceType" placeholder="设备类型" clearable class="search-select">
-            <el-option label="电视" value="电视" />
-            <el-option label="音响" value="音响" />
-            <el-option label="麦克风" value="麦克风" />
-            <el-option label="投影仪" value="投影仪" />
-            <el-option label="其他" value="其他" />
+            <el-option v-for="t in deviceTypeOptions" :key="t" :label="t" :value="t" />
           </el-select>
           <el-button @click="searchDevices" type="primary">
             <el-icon><Search /></el-icon>
@@ -135,9 +131,13 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, Plus, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deviceApi, floorApi, roomApi } from '../api'
+import { deviceApi, floorApi, roomApi, specTemplateApi } from '../api'
+
+const DEFAULT_TYPES = ['电视', '音响', '麦克风', '投影仪', '其他']
 
 const router = useRouter()
+
+const deviceTypeOptions = ref([...DEFAULT_TYPES])
 
 const loading = ref(false)
 const devices = ref([])
@@ -175,7 +175,7 @@ const batchRooms = ref([])
 
 const getTypeTagType = (type) => {
   const map = { '电视': 'primary', '音响': 'success', '麦克风': 'info', '投影仪': 'warning', '其他': 'danger' }
-  return map[type] || 'info'
+  return map[type] || ''
 }
 
 const getStatusTagType = (status) => {
@@ -336,9 +336,25 @@ const loadFloors = async () => {
   }
 }
 
+const loadDeviceTypes = async () => {
+  try {
+    const templates = await specTemplateApi.getEnabled()
+    const types = [...DEFAULT_TYPES]
+    templates.forEach(t => {
+      if (!types.includes(t.deviceType)) {
+        types.push(t.deviceType)
+      }
+    })
+    deviceTypeOptions.value = types
+  } catch (error) {
+    console.error('加载设备类型失败', error)
+  }
+}
+
 onMounted(() => {
   loadDevices()
   loadFloors()
+  loadDeviceTypes()
 })
 </script>
 

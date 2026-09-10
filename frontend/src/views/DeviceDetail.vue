@@ -81,12 +81,18 @@
 
           <el-col :span="8">
             <el-card title="规格参数">
-              <div v-if="device.specJson && Object.keys(device.specJson).length > 0">
-                <div v-for="(value, key) in device.specJson" :key="key" class="spec-item">
-                  <span class="spec-key">{{ key }}</span>
-                  <span class="spec-value">{{ value }}</span>
+              <template v-if="templateSpecRows.length > 0">
+                <div v-for="row in templateSpecRows" :key="row.key" class="spec-item">
+                  <span class="spec-key">{{ row.label }}</span>
+                  <span class="spec-value">{{ formatSpecValue(row.value) }}</span>
                 </div>
-              </div>
+              </template>
+              <template v-else-if="rawSpecKeys.length > 0">
+                <div v-for="key in rawSpecKeys" :key="key" class="spec-item">
+                  <span class="spec-key">{{ key }}</span>
+                  <span class="spec-value">{{ formatSpecValue(device.specJson[key]) }}</span>
+                </div>
+              </template>
               <div v-else class="no-spec">暂无规格参数</div>
             </el-card>
           </el-col>
@@ -144,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { RefreshLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -164,6 +170,7 @@ const device = reactive({
   brand: '',
   model: '',
   specJson: {},
+  specFields: [],
   imageUrl: '',
   currentFloorName: '',
   currentRoomName: '',
@@ -174,6 +181,33 @@ const device = reactive({
   createdBy: '',
   createdAt: null
 })
+
+// 按模板字段顺序渲染；模板已停用时 specFields 仍由后端返回，历史规格正常展示
+const templateSpecRows = computed(() => {
+  const fields = device.specFields || []
+  if (fields.length === 0) return []
+  const rows = []
+  fields.forEach(field => {
+    const value = device.specJson ? device.specJson[field.fieldKey] : undefined
+    if (value !== undefined && value !== null && value !== '') {
+      rows.push({ key: field.fieldKey, label: field.fieldLabel, value })
+    }
+  })
+  return rows
+})
+
+// 模板未覆盖（或已被删除的字段）的历史键值，兜底展示
+const rawSpecKeys = computed(() => {
+  const spec = device.specJson || {}
+  const definedKeys = new Set((device.specFields || []).map(f => f.fieldKey))
+  return Object.keys(spec).filter(k => !definedKeys.has(k) && spec[k] !== null && spec[k] !== '')
+})
+
+const formatSpecValue = (value) => {
+  if (value === true || value === 'true') return '是'
+  if (value === false || value === 'false') return '否'
+  return value === null || value === undefined ? '-' : String(value)
+}
 
 const transferHistory = ref([])
 const floors = ref([])
