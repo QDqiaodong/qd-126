@@ -20,6 +20,7 @@ import com.example.devicemanagement.service.DeviceSpecValidator;
 import com.example.devicemanagement.service.FloorService;
 import com.example.devicemanagement.service.ReceptionRoomService;
 import com.example.devicemanagement.service.RedisCacheService;
+import com.example.devicemanagement.service.RoomActivityService;
 import com.example.devicemanagement.service.SpecTemplateService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -58,6 +59,9 @@ public class DeviceServiceImpl implements DeviceService {
 
     @Autowired
     private SpecTemplateService specTemplateService;
+
+    @Autowired
+    private RoomActivityService roomActivityService;
 
     @Override
     @Transactional
@@ -100,6 +104,11 @@ public class DeviceServiceImpl implements DeviceService {
         }
 
         Long oldRoomId = device.getCurrentRoomId();
+
+        // 活动进行中的设备不得再被调配到其他房间
+        if (request.getCurrentRoomId() == null || !request.getCurrentRoomId().equals(oldRoomId)) {
+            roomActivityService.assertDeviceTransferable(device.getId());
+        }
 
         device.setDeviceName(request.getDeviceName());
         device.setDeviceType(request.getDeviceType());
@@ -228,6 +237,11 @@ public class DeviceServiceImpl implements DeviceService {
         Device device = deviceMapper.selectById(request.getDeviceId());
         if (device == null) {
             throw new RuntimeException("设备不存在");
+        }
+
+        // 活动进行中的设备不得再被调配到其他房间
+        if (request.getToRoomId() == null || !request.getToRoomId().equals(device.getCurrentRoomId())) {
+            roomActivityService.assertDeviceTransferable(device.getId());
         }
 
         Long oldFloorId = device.getCurrentFloorId();

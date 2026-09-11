@@ -134,6 +134,39 @@ CREATE TABLE IF NOT EXISTS `inventory_item` (
     INDEX `idx_check_result` (`batch_id`, `check_result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点明细表';
 
+CREATE TABLE IF NOT EXISTS `room_activity` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '活动ID',
+    `activity_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '活动编号',
+    `activity_name` VARCHAR(200) NOT NULL COMMENT '活动名称',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `start_time` DATETIME NOT NULL COMMENT '开始时间',
+    `end_time` DATETIME NOT NULL COMMENT '结束时间',
+    `manager` VARCHAR(50) NOT NULL COMMENT '负责人',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0待开始 1进行中 2已结束（按当前时间懒推进）',
+    `released_at` DATETIME DEFAULT NULL COMMENT '占用释放时间（到期自动释放或手动结束）',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_time` (`room_id`, `start_time`, `end_time`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_start_end` (`start_time`, `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室活动占用表';
+
+CREATE TABLE IF NOT EXISTS `room_activity_device` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '占用明细ID',
+    `activity_id` BIGINT NOT NULL COMMENT '活动ID',
+    `device_id` BIGINT NOT NULL COMMENT '设备ID',
+    `device_code` VARCHAR(50) NOT NULL COMMENT '设备编号（快照）',
+    `device_name` VARCHAR(100) NOT NULL COMMENT '设备名称（快照）',
+    `device_type` VARCHAR(50) NOT NULL COMMENT '设备类型（快照）',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    UNIQUE KEY `uk_activity_device` (`activity_id`, `device_id`),
+    INDEX `idx_activity_id` (`activity_id`),
+    INDEX `idx_device_id` (`device_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动占用影音设备明细表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),

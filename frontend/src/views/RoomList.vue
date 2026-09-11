@@ -31,6 +31,18 @@
             <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="当前占用" width="200">
+          <template #default="{ row }">
+            <el-tag v-if="row.occupied" type="danger" size="small" class="occupy-tag">
+              活动占用中
+            </el-tag>
+            <el-tooltip v-if="row.occupied" :content="`${row.activityName}（负责人：${row.manager || '-'}）`" placement="top">
+              <span class="occupy-name">{{ row.activityName }}</span>
+            </el-tooltip>
+            <el-tag v-else-if="row.status === 1" type="success" size="small" effect="plain">空闲</el-tag>
+            <span v-else class="occupy-idle">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
@@ -100,7 +112,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { roomApi, floorApi, deviceApi } from '../api'
+import { roomApi, floorApi, deviceApi, activityApi } from '../api'
 
 const loading = ref(false)
 const devicesLoading = ref(false)
@@ -150,11 +162,26 @@ const loadRooms = async () => {
     if (searchRoomName.value) {
       result = result.filter(r => r.roomName && r.roomName.includes(searchRoomName.value))
     }
+    // 当前活动占用态：与活动列表同一数据源，刷新后保持一致
+    let occupancyMap = new Map()
+    try {
+      const occupancies = await activityApi.getRoomOccupancies(
+        searchFloorId.value ? { floorId: searchFloorId.value } : {})
+      occupancyMap = new Map((occupancies || []).map(o => [o.roomId, o]))
+    } catch (error) {
+      console.error('加载接待室占用状态失败', error)
+    }
     const floorMap = new Map(floors.value.map(f => [f.id, f.floorName]))
-    rooms.value = result.map(r => ({
-      ...r,
-      floorName: floorMap.get(r.floorId) || '-'
-    }))
+    rooms.value = result.map(r => {
+      const occupancy = occupancyMap.get(r.id)
+      return {
+        ...r,
+        floorName: floorMap.get(r.floorId) || '-',
+        occupied: occupancy ? occupancy.occupied : false,
+        activityName: occupancy ? occupancy.activityName : null,
+        manager: occupancy ? occupancy.manager : null
+      }
+    })
   } catch (error) {
     console.error('加载接待室列表失败', error)
   } finally {
@@ -278,5 +305,24 @@ onMounted(() => {
 .action-bar {
   display: flex;
   gap: 12px;
+}
+
+.occupy-tag {
+  margin-right: 6px;
+}
+
+.occupy-name {
+  font-size: 12px;
+  color: #f56c6c;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.occupy-idle {
+  color: #c0c4cc;
 }
 </style>

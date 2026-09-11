@@ -81,3 +81,11 @@ export const inventoryApi = {
     request.post(`/inventory/batch/${batchId}/item/${itemId}/resolve`, data),
   closeBatch: id => request.post(`/inventory/batch/${id}/close`)
 }
+
+export const activityApi = {
+  create: data => request.post('/activity', data),
+  getPage: params => request.get('/activity', { params }),
+  getById: id => request.get(`/activity/${id}`),
+  finish: id => request.post(`/activity/${id}/finish`),
+  getRoomOccupancies: params => request.get('/activity/room-occupancy', { params })
+}
