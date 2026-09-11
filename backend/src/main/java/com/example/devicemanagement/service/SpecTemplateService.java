@@ -2,6 +2,7 @@ package com.example.devicemanagement.service;
 
 import com.example.devicemanagement.dto.request.SpecTemplateRequest;
 import com.example.devicemanagement.dto.response.SpecFieldVO;
+import com.example.devicemanagement.dto.response.SpecTemplatePreviewVO;
 import com.example.devicemanagement.dto.response.SpecTemplateVO;
 import com.example.devicemanagement.entity.DeviceSpecTemplate;
 
@@ -12,6 +13,12 @@ public interface SpecTemplateService {
     SpecTemplateVO createTemplate(SpecTemplateRequest request);
 
     SpecTemplateVO updateTemplate(Long id, SpecTemplateRequest request);
+
+    /**
+     * 编辑保存前的变更预览：字段新增/删除/类型变化及受影响设备数量。
+     * 只做差异计算，不落库；同时对请求做完整校验，非法字段定义直接拦截。
+     */
+    SpecTemplatePreviewVO previewChanges(Long id, SpecTemplateRequest request);
 
     /**
      * 启用/停用模板。停用不影响历史设备已保存的规格数据。

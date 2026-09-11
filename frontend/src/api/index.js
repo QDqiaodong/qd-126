@@ -63,5 +63,7 @@ export const specTemplateApi = {
   getByType: deviceType => request.get(`/spec-template/type/${encodeURIComponent(deviceType)}`),
   create: data => request.post('/spec-template', data),
   update: (id, data) => request.put(`/spec-template/${id}`, data),
+  // 编辑保存前的变更预览（新增/删除/类型变化 + 受影响设备数），不落库
+  preview: (id, data) => request.post(`/spec-template/${id}/preview`, data),
   updateStatus: (id, status) => request.put(`/spec-template/${id}/status`, { status })
 }

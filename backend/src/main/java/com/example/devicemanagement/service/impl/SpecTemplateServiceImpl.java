@@ -3,10 +3,14 @@ package com.example.devicemanagement.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.devicemanagement.dto.request.SpecFieldRequest;
 import com.example.devicemanagement.dto.request.SpecTemplateRequest;
+import com.example.devicemanagement.dto.response.SpecFieldChangeVO;
 import com.example.devicemanagement.dto.response.SpecFieldVO;
+import com.example.devicemanagement.dto.response.SpecTemplatePreviewVO;
 import com.example.devicemanagement.dto.response.SpecTemplateVO;
+import com.example.devicemanagement.entity.Device;
 import com.example.devicemanagement.entity.DeviceSpecField;
 import com.example.devicemanagement.entity.DeviceSpecTemplate;
+import com.example.devicemanagement.mapper.DeviceMapper;
 import com.example.devicemanagement.mapper.DeviceSpecFieldMapper;
 import com.example.devicemanagement.mapper.DeviceSpecTemplateMapper;
 import com.example.devicemanagement.service.SpecTemplateService;
@@ -19,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,6 +42,9 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
     private DeviceSpecFieldMapper fieldMapper;
 
     @Autowired
+    private DeviceMapper deviceMapper;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -48,12 +57,15 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
             throw new IllegalArgumentException("设备类型【" + request.getDeviceType() + "】的规格模板已存在");
         }
 
+        // 先构建并校验全部字段，任何一条非法都在写库前抛异常，避免半成品
+        List<DeviceSpecField> newFields = buildFieldEntities(null, request.getFields());
+
         DeviceSpecTemplate template = new DeviceSpecTemplate();
         template.setDeviceType(request.getDeviceType().trim());
         template.setStatus(request.getStatus() != null ? request.getStatus() : 1);
         templateMapper.insert(template);
 
-        replaceFields(template.getId(), request.getFields());
+        insertFields(template.getId(), newFields);
         return getTemplateById(template.getId());
     }
 
@@ -71,14 +83,78 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
             throw new IllegalArgumentException("设备类型【" + request.getDeviceType() + "】已存在其他规格模板");
         }
 
+        // 先构建并校验全部字段；非法定义直接抛出，旧字段定义保持原样，不产生半成品
+        List<DeviceSpecField> newFields = buildFieldEntities(id, request.getFields());
+
         template.setDeviceType(request.getDeviceType().trim());
         if (request.getStatus() != null) {
             template.setStatus(request.getStatus());
         }
         templateMapper.updateById(template);
 
-        replaceFields(template.getId(), request.getFields());
+        replaceFields(template.getId(), newFields);
         return getTemplateById(id);
+    }
+
+    @Override
+    public SpecTemplatePreviewVO previewChanges(Long id, SpecTemplateRequest request) {
+        DeviceSpecTemplate template = templateMapper.selectById(id);
+        if (template == null) {
+            throw new IllegalArgumentException("规格模板不存在");
+        }
+        validateTemplateRequest(request);
+        // 预览同样执行完整字段校验，非法定义提前暴露，避免确认保存时才失败
+        List<DeviceSpecField> newFields = buildFieldEntities(id, request.getFields());
+        List<DeviceSpecField> oldFields = listFieldEntities(id);
+
+        Map<String, DeviceSpecField> oldMap = oldFields.stream()
+                .collect(Collectors.toMap(DeviceSpecField::getFieldKey, f -> f, (a, b) -> a,
+                        LinkedHashMap::new));
+        Map<String, DeviceSpecField> newMap = newFields.stream()
+                .collect(Collectors.toMap(DeviceSpecField::getFieldKey, f -> f, (a, b) -> a,
+                        LinkedHashMap::new));
+
+        List<SpecFieldChangeVO> added = new ArrayList<>();
+        List<SpecFieldChangeVO> removed = new ArrayList<>();
+        List<SpecFieldChangeVO> typeChanged = new ArrayList<>();
+
+        for (DeviceSpecField field : newFields) {
+            DeviceSpecField old = oldMap.get(field.getFieldKey());
+            if (old == null) {
+                added.add(toChangeVO(field, null));
+            } else if (!old.getFieldType().equals(field.getFieldType())) {
+                typeChanged.add(toChangeVO(field, old));
+            }
+        }
+        for (DeviceSpecField old : oldFields) {
+            if (!newMap.containsKey(old.getFieldKey())) {
+                removed.add(toChangeVO(old, null));
+            }
+        }
+
+        // 仅删除字段和类型变化会影响历史设备已保存的规格；新增字段不影响存量数据
+        Set<String> affectedKeys = new HashSet<>();
+        removed.forEach(f -> affectedKeys.add(f.getFieldKey()));
+        typeChanged.forEach(f -> affectedKeys.add(f.getFieldKey()));
+
+        List<Device> devices = listDevicesByType(template.getDeviceType());
+        int affectedCount = 0;
+        for (Device device : devices) {
+            if (hasAffectedSpecValue(device.getSpecJson(), affectedKeys)) {
+                affectedCount++;
+            }
+        }
+
+        SpecTemplatePreviewVO vo = new SpecTemplatePreviewVO();
+        vo.setTemplateId(id);
+        vo.setDeviceType(template.getDeviceType());
+        vo.setTotalDeviceCount(devices.size());
+        vo.setAffectedDeviceCount(affectedCount);
+        vo.setAddedFields(added);
+        vo.setRemovedFields(removed);
+        vo.setTypeChangedFields(typeChanged);
+        vo.setChanged(!added.isEmpty() || !removed.isEmpty() || !typeChanged.isEmpty());
+        return vo;
     }
 
     @Override
@@ -91,6 +167,7 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
         if (template == null) {
             throw new IllegalArgumentException("规格模板不存在");
         }
+        // 仅切换模板状态：不触碰字段定义，更不触碰历史设备 spec_json
         template.setStatus(status);
         templateMapper.updateById(template);
         return getTemplateById(id);
@@ -185,18 +262,46 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
         return fieldMapper.selectList(wrapper);
     }
 
+    private List<Device> listDevicesByType(String deviceType) {
+        LambdaQueryWrapper<Device> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Device::getDeviceType, deviceType);
+        return deviceMapper.selectList(wrapper);
+    }
+
     /**
-     * 保存模板时整体覆盖字段定义；历史设备 spec_json 不受影响。
+     * 判断设备已保存规格中是否含有受影响字段（被删除或类型变化）的实际值。
      */
-    private void replaceFields(Long templateId, List<SpecFieldRequest> fields) {
-        LambdaQueryWrapper<DeviceSpecField> deleteWrapper = new LambdaQueryWrapper<>();
-        deleteWrapper.eq(DeviceSpecField::getTemplateId, templateId);
-        fieldMapper.delete(deleteWrapper);
-
-        if (fields == null || fields.isEmpty()) {
-            return;
+    private boolean hasAffectedSpecValue(String specJson, Set<String> affectedKeys) {
+        if (affectedKeys.isEmpty() || specJson == null || specJson.isEmpty()) {
+            return false;
         }
+        try {
+            Map<String, Object> spec = objectMapper.readValue(
+                    specJson, new TypeReference<Map<String, Object>>() {});
+            for (String key : affectedKeys) {
+                Object value = spec.get(key);
+                if (value == null) {
+                    continue;
+                }
+                if (!(value instanceof String) || !((String) value).isEmpty()) {
+                    return true;
+                }
+            }
+        } catch (JsonProcessingException ignored) {
+            // 历史规格 JSON 无法解析时，保守计为受影响，避免漏报
+            return true;
+        }
+        return false;
+    }
 
+    /**
+     * 基于请求构建全部字段实体并完成全量校验；任一字段非法即抛出，不执行任何写库。
+     */
+    private List<DeviceSpecField> buildFieldEntities(Long templateId, List<SpecFieldRequest> fields) {
+        List<DeviceSpecField> entities = new ArrayList<>();
+        if (fields == null || fields.isEmpty()) {
+            return entities;
+        }
         Set<String> keySet = new HashSet<>();
         int index = 0;
         for (SpecFieldRequest field : fields) {
@@ -226,9 +331,28 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
             entity.setRequired(Boolean.TRUE.equals(field.getRequired()) ? 1 : 0);
             entity.setOptions(writeOptions(field.getOptions()));
             entity.setSortOrder(field.getSortOrder() != null ? field.getSortOrder() : index);
-            fieldMapper.insert(entity);
+            entities.add(entity);
             index++;
         }
+        return entities;
+    }
+
+    private void insertFields(Long templateId, List<DeviceSpecField> entities) {
+        for (DeviceSpecField entity : entities) {
+            entity.setTemplateId(templateId);
+            fieldMapper.insert(entity);
+        }
+    }
+
+    /**
+     * 保存模板时整体覆盖字段定义；调用方必须已完成全量校验。
+     * 历史设备 spec_json 保存在 device 表，字段覆盖不影响其数据。
+     */
+    private void replaceFields(Long templateId, List<DeviceSpecField> validatedFields) {
+        LambdaQueryWrapper<DeviceSpecField> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(DeviceSpecField::getTemplateId, templateId);
+        fieldMapper.delete(deleteWrapper);
+        insertFields(templateId, validatedFields);
     }
 
     private void validateTemplateRequest(SpecTemplateRequest request) {
@@ -270,6 +394,21 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
         } catch (JsonProcessingException e) {
             return new ArrayList<>();
         }
+    }
+
+    private SpecFieldChangeVO toChangeVO(DeviceSpecField field, DeviceSpecField oldField) {
+        SpecFieldChangeVO vo = new SpecFieldChangeVO();
+        vo.setFieldKey(field.getFieldKey());
+        vo.setFieldLabel(field.getFieldLabel());
+        vo.setFieldType(field.getFieldType());
+        vo.setRequired(field.getRequired() != null && field.getRequired() == 1);
+        vo.setOptions(readOptions(field.getOptions()));
+        vo.setSortOrder(field.getSortOrder());
+        if (oldField != null) {
+            vo.setOldFieldType(oldField.getFieldType());
+            vo.setNewFieldType(field.getFieldType());
+        }
+        return vo;
     }
 
     private SpecTemplateVO convertToVO(DeviceSpecTemplate template, List<DeviceSpecField> fields) {

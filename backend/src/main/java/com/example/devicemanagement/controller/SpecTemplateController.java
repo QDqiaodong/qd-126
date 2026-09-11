@@ -2,6 +2,7 @@ package com.example.devicemanagement.controller;
 
 import com.example.devicemanagement.dto.request.SpecTemplateRequest;
 import com.example.devicemanagement.dto.response.ApiResponse;
+import com.example.devicemanagement.dto.response.SpecTemplatePreviewVO;
 import com.example.devicemanagement.dto.response.SpecTemplateVO;
 import com.example.devicemanagement.service.SpecTemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,15 @@ public class SpecTemplateController {
     public ApiResponse<SpecTemplateVO> updateTemplate(@PathVariable Long id,
                                                       @RequestBody SpecTemplateRequest request) {
         return ApiResponse.success(specTemplateService.updateTemplate(id, request));
+    }
+
+    /**
+     * 编辑保存前的变更预览：新增/删除/类型变化字段及受影响设备数量，不落库。
+     */
+    @PostMapping("/{id}/preview")
+    public ApiResponse<SpecTemplatePreviewVO> previewChanges(@PathVariable Long id,
+                                                             @RequestBody SpecTemplateRequest request) {
+        return ApiResponse.success(specTemplateService.previewChanges(id, request));
     }
 
     @PutMapping("/{id}/status")
