@@ -186,7 +186,7 @@ public class RoomActivityServiceImpl implements RoomActivityService {
         if (status != null) {
             wrapper.eq(RoomActivity::getStatus, status);
         }
-        wrapper.orderByDesc(RoomActivity::getStartTime).orderByDesc(RoomActivity::getId());
+        wrapper.orderByDesc(RoomActivity::getStartTime).orderByDesc(RoomActivity::getId);
         IPage<RoomActivity> activityPage = activityMapper.selectPage(page, wrapper);
 
         Map<Long, String> floorMap = loadFloorMap();

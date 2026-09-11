@@ -208,14 +208,17 @@ public class InventoryServiceImpl implements InventoryService {
 
         Map<Long, String> floorMap = loadFloorMap();
         Map<Long, String> roomMap = loadRoomMap();
-        Map<Long, Device> liveDeviceMap = Collections.emptyMap();
+        final Map<Long, Device> liveDeviceMap;
         if (batch.getStatus() == InventoryBatch.STATUS_COUNTING && !items.isEmpty()) {
             List<Long> deviceIds = items.stream().map(InventoryItem::getDeviceId).collect(Collectors.toList());
             liveDeviceMap = deviceMapper.selectBatchIds(deviceIds).stream()
                     .collect(Collectors.toMap(Device::getId, Function.identity(), (a, b) -> a));
+        } else {
+            liveDeviceMap = Collections.emptyMap();
         }
+        final int batchStatus = batch.getStatus();
         return items.stream()
-                .map(item -> toItemVO(item, floorMap, roomMap, liveDeviceMap, batch.getStatus()))
+                .map(item -> toItemVO(item, floorMap, roomMap, liveDeviceMap, batchStatus))
                 .collect(Collectors.toList());
     }
 
