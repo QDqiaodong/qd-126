@@ -50,6 +50,16 @@ const routes = [
     path: '/grouped',
     name: 'GroupedView',
     component: () => import('../views/GroupedView.vue')
+  },
+  {
+    path: '/inventory',
+    name: 'InventoryList',
+    component: () => import('../views/InventoryList.vue')
+  },
+  {
+    path: '/inventory/:id',
+    name: 'InventoryDetail',
+    component: () => import('../views/InventoryDetail.vue')
   }
 ]
 

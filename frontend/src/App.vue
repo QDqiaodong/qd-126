@@ -31,6 +31,10 @@
             <el-icon><RefreshLeft /></el-icon>
             <span>流转记录</span>
           </el-menu-item>
+          <el-menu-item index="/inventory">
+            <el-icon><Finished /></el-icon>
+            <span>盘点批次</span>
+          </el-menu-item>
           <el-menu-item index="/spec-template">
             <el-icon><Tickets /></el-icon>
             <span>规格模板</span>
@@ -58,7 +62,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets } from '@element-plus/icons-vue'
+import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -77,6 +81,7 @@ const titleMap = {
   '/floor': '楼层管理',
   '/room': '接待室管理',
   '/transfer': '流转记录',
+  '/inventory': '盘点批次',
   '/spec-template': '设备规格模板管理',
   '/grouped': '楼层分组视图'
 }
@@ -93,6 +98,12 @@ onMounted(() => {
 onUnmounted(() => {})
 
 router.beforeEach((to, from, next) => {
+  if (to.path.startsWith('/inventory')) {
+    activeMenu.value = '/inventory'
+    pageTitle.value = to.path === '/inventory' ? '盘点批次' : '盘点批次工作台'
+    next()
+    return
+  }
   activeMenu.value = to.path.split('/edit')[0].split('/detail')[0]
   pageTitle.value = titleMap[to.path] || titleMap[to.path.split('/edit')[0]] || titleMap[to.path.split('/detail')[0]] || '设备管理系统'
   next()

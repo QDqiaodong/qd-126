@@ -85,6 +85,55 @@ CREATE TABLE IF NOT EXISTS `device_transfer` (
     INDEX `idx_transfer_time` (`transfer_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备流转记录表';
 
+CREATE TABLE IF NOT EXISTS `inventory_batch` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '盘点批次ID',
+    `batch_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '批次编号',
+    `batch_name` VARCHAR(100) NOT NULL COMMENT '批次名称',
+    `scope_type` VARCHAR(10) NOT NULL COMMENT '盘点范围类型 FLOOR楼层 ROOM接待室',
+    `floor_id` BIGINT DEFAULT NULL COMMENT '盘点楼层ID',
+    `room_id` BIGINT DEFAULT NULL COMMENT '盘点接待室ID（按楼层时为空）',
+    `operator` VARCHAR(50) NOT NULL COMMENT '盘点负责人',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0盘点中 1已提交 2已关闭',
+    `snapshot_time` DATETIME NOT NULL COMMENT '快照生成时间',
+    `submitted_at` DATETIME DEFAULT NULL COMMENT '提交时间',
+    `closed_at` DATETIME DEFAULT NULL COMMENT '关闭时间',
+    `total_count` INT NOT NULL DEFAULT 0 COMMENT '设备总数',
+    `present_count` INT NOT NULL DEFAULT 0 COMMENT '在场数',
+    `missing_count` INT NOT NULL DEFAULT 0 COMMENT '缺失数',
+    `mismatch_count` INT NOT NULL DEFAULT 0 COMMENT '位置不符数',
+    `repair_count` INT NOT NULL DEFAULT 0 COMMENT '待维修数',
+    `checked_count` INT NOT NULL DEFAULT 0 COMMENT '已盘点数',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '批次备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_status` (`status`),
+    INDEX `idx_scope` (`scope_type`, `floor_id`, `room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点批次表';
+
+CREATE TABLE IF NOT EXISTS `inventory_item` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '盘点明细ID',
+    `batch_id` BIGINT NOT NULL COMMENT '所属盘点批次ID',
+    `device_id` BIGINT NOT NULL COMMENT '设备ID',
+    `device_code` VARCHAR(50) NOT NULL COMMENT '设备编号（快照）',
+    `device_name` VARCHAR(100) NOT NULL COMMENT '设备名称（快照）',
+    `device_type` VARCHAR(50) NOT NULL COMMENT '设备类型（快照）',
+    `snapshot_floor_id` BIGINT DEFAULT NULL COMMENT '快照楼层ID',
+    `snapshot_room_id` BIGINT DEFAULT NULL COMMENT '快照接待室ID',
+    `check_result` TINYINT DEFAULT NULL COMMENT '盘点结果 1在场 2缺失 3位置不符 4待维修，NULL未盘点',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '盘点备注',
+    `ledger_floor_id` BIGINT DEFAULT NULL COMMENT '提交时台账楼层ID（差异基准）',
+    `ledger_room_id` BIGINT DEFAULT NULL COMMENT '提交时台账接待室ID（差异基准）',
+    `location_mismatch` TINYINT NOT NULL DEFAULT 0 COMMENT '提交时是否位置不符 1是 0否',
+    `process_status` TINYINT DEFAULT NULL COMMENT '处理状态 1待处理 2已处理（缺失/位置不符）',
+    `process_remark` VARCHAR(500) DEFAULT NULL COMMENT '处理备注',
+    `processed_at` DATETIME DEFAULT NULL COMMENT '处理时间',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY `uk_batch_device` (`batch_id`, `device_id`),
+    INDEX `idx_batch_id` (`batch_id`),
+    INDEX `idx_check_result` (`batch_id`, `check_result`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点明细表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),

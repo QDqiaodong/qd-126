@@ -67,3 +67,17 @@ export const specTemplateApi = {
   preview: (id, data) => request.post(`/spec-template/${id}/preview`, data),
   updateStatus: (id, status) => request.put(`/spec-template/${id}/status`, { status })
 }
+
+export const inventoryApi = {
+  createBatch: data => request.post('/inventory/batch', data),
+  getBatches: params => request.get('/inventory/batch', { params }),
+  getBatch: id => request.get(`/inventory/batch/${id}`),
+  getItems: (id, params) => request.get(`/inventory/batch/${id}/items`, { params }),
+  checkItem: (batchId, itemId, data) => request.put(`/inventory/batch/${batchId}/item/${itemId}`, data),
+  submitBatch: id => request.post(`/inventory/batch/${id}/submit`),
+  transferItem: (batchId, itemId, data) =>
+    request.post(`/inventory/batch/${batchId}/item/${itemId}/transfer`, data),
+  resolveItem: (batchId, itemId, data) =>
+    request.post(`/inventory/batch/${batchId}/item/${itemId}/resolve`, data),
+  closeBatch: id => request.post(`/inventory/batch/${id}/close`)
+}
