@@ -19,6 +19,10 @@
             <el-icon><Grid /></el-icon>
             <span>楼层分组</span>
           </el-menu-item>
+          <el-menu-item index="/warranty">
+            <el-icon><AlarmClock /></el-icon>
+            <span>保修到期</span>
+          </el-menu-item>
           <el-menu-item index="/floor">
             <el-icon><OfficeBuilding /></el-icon>
             <span>楼层管理</span>
@@ -66,7 +70,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar } from '@element-plus/icons-vue'
+import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar, AlarmClock } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -88,7 +92,8 @@ const titleMap = {
   '/transfer': '流转记录',
   '/inventory': '盘点批次',
   '/spec-template': '设备规格模板管理',
-  '/grouped': '楼层分组视图'
+  '/grouped': '楼层分组视图',
+  '/warranty': '影音设备保修到期'
 }
 
 const updateTitle = (title) => {

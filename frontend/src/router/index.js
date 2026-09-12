@@ -52,6 +52,11 @@ const routes = [
     component: () => import('../views/GroupedView.vue')
   },
   {
+    path: '/warranty',
+    name: 'WarrantyView',
+    component: () => import('../views/WarrantyView.vue')
+  },
+  {
     path: '/inventory',
     name: 'InventoryList',
     component: () => import('../views/InventoryList.vue')

@@ -9,6 +9,9 @@ import com.example.devicemanagement.dto.request.DeviceTransferRequest;
 import com.example.devicemanagement.dto.request.DeviceUpdateRequest;
 import com.example.devicemanagement.dto.response.DeviceVO;
 import com.example.devicemanagement.dto.response.TransferRecordVO;
+import com.example.devicemanagement.dto.response.WarrantyDeviceVO;
+import com.example.devicemanagement.dto.response.WarrantyFloorGroupVO;
+import com.example.devicemanagement.dto.response.WarrantyOverviewVO;
 import com.example.devicemanagement.entity.Device;
 import com.example.devicemanagement.entity.DeviceTransfer;
 import com.example.devicemanagement.entity.Floor;
@@ -29,12 +32,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class DeviceServiceImpl implements DeviceService {
+
+    /**
+     * 保修临期阈值：距截止不足该天数标黄
+     */
+    private static final int WARRANTY_EXPIRING_SOON_DAYS = 15;
 
     @Autowired
     private DeviceMapper deviceMapper;
@@ -229,6 +239,107 @@ public class DeviceServiceImpl implements DeviceService {
         wrapper.eq(Device::getCurrentRoomId, roomId);
         List<Device> devices = deviceMapper.selectList(wrapper);
         return devices.stream().map(this::convertToVO).collect(Collectors.toList());
+    }
+
+    @Override
+    public WarrantyOverviewVO getWarrantyOverview(Long floorId, Long roomId) {
+        LambdaQueryWrapper<Device> wrapper = new LambdaQueryWrapper<>();
+        if (floorId != null) {
+            wrapper.eq(Device::getCurrentFloorId, floorId);
+        }
+        if (roomId != null) {
+            wrapper.eq(Device::getCurrentRoomId, roomId);
+        }
+        List<Device> devices = deviceMapper.selectList(wrapper);
+
+        List<Floor> floors = floorService.getAllFloors();
+        Map<Long, String> floorNames = floors.stream()
+                .collect(Collectors.toMap(Floor::getId, Floor::getFloorName));
+        Map<Long, String> roomNames = roomService.getAllRooms().stream()
+                .collect(Collectors.toMap(ReceptionRoom::getId, ReceptionRoom::getRoomName));
+
+        LocalDate today = LocalDate.now();
+        Map<Long, List<WarrantyDeviceVO>> datedByFloor = new LinkedHashMap<>();
+        List<WarrantyDeviceVO> datedUnassigned = new ArrayList<>();
+        List<WarrantyDeviceVO> undated = new ArrayList<>();
+
+        for (Device device : devices) {
+            WarrantyDeviceVO vo = convertToWarrantyVO(device, today, floorNames, roomNames);
+            if (device.getWarrantyEndDate() == null) {
+                undated.add(vo);
+            } else if (vo.getCurrentFloorId() != null && floorNames.containsKey(vo.getCurrentFloorId())) {
+                datedByFloor.computeIfAbsent(vo.getCurrentFloorId(), k -> new ArrayList<>()).add(vo);
+            } else {
+                datedUnassigned.add(vo);
+            }
+        }
+
+        // 已过期（负数）排最前，其次临期，同组内按剩余天数升序
+        Comparator<WarrantyDeviceVO> byDaysRemaining = Comparator.comparing(WarrantyDeviceVO::getDaysRemaining);
+        datedByFloor.values().forEach(list -> list.sort(byDaysRemaining));
+        datedUnassigned.sort(byDaysRemaining);
+        undated.sort(Comparator.comparing(WarrantyDeviceVO::getDeviceCode,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+
+        List<WarrantyFloorGroupVO> groups = new ArrayList<>();
+        for (Floor floor : floors) {
+            List<WarrantyDeviceVO> floorDevices = datedByFloor.get(floor.getId());
+            if (floorDevices != null && !floorDevices.isEmpty()) {
+                WarrantyFloorGroupVO group = new WarrantyFloorGroupVO();
+                group.setFloorId(floor.getId());
+                group.setFloorName(floor.getFloorName());
+                group.setDevices(floorDevices);
+                groups.add(group);
+            }
+        }
+        if (!datedUnassigned.isEmpty()) {
+            WarrantyFloorGroupVO group = new WarrantyFloorGroupVO();
+            group.setFloorId(null);
+            group.setFloorName("未分配楼层");
+            group.setDevices(datedUnassigned);
+            groups.add(group);
+        }
+
+        WarrantyOverviewVO overview = new WarrantyOverviewVO();
+        overview.setExpiringSoonDays(WARRANTY_EXPIRING_SOON_DAYS);
+        overview.setGroups(groups);
+        overview.setNoWarrantyDevices(undated);
+        return overview;
+    }
+
+    private WarrantyDeviceVO convertToWarrantyVO(Device device, LocalDate today,
+                                                 Map<Long, String> floorNames, Map<Long, String> roomNames) {
+        WarrantyDeviceVO vo = new WarrantyDeviceVO();
+        vo.setId(device.getId());
+        vo.setDeviceCode(device.getDeviceCode());
+        vo.setDeviceName(device.getDeviceName());
+        vo.setDeviceType(device.getDeviceType());
+        vo.setBrand(device.getBrand());
+        vo.setModel(device.getModel());
+        vo.setCurrentFloorId(device.getCurrentFloorId());
+        vo.setCurrentFloorName(device.getCurrentFloorId() != null ? floorNames.get(device.getCurrentFloorId()) : null);
+        vo.setCurrentRoomId(device.getCurrentRoomId());
+        vo.setCurrentRoomName(device.getCurrentRoomId() != null ? roomNames.get(device.getCurrentRoomId()) : null);
+        vo.setWarrantyEndDate(device.getWarrantyEndDate());
+
+        if (device.getWarrantyEndDate() == null) {
+            vo.setWarrantyStatus("NONE");
+            vo.setWarrantyStatusText("未设置");
+            return vo;
+        }
+        long daysRemaining = ChronoUnit.DAYS.between(today, device.getWarrantyEndDate());
+        vo.setDaysRemaining(daysRemaining);
+        if (daysRemaining < 0) {
+            vo.setWarrantyStatus("EXPIRED");
+            vo.setWarrantyStatusText("已过期");
+        } else if (daysRemaining < WARRANTY_EXPIRING_SOON_DAYS) {
+            vo.setWarrantyStatus("EXPIRING");
+            vo.setWarrantyStatusText("临期");
+        } else {
+            vo.setWarrantyStatus("NORMAL");
+            vo.setWarrantyStatusText("正常");
+        }
+        return vo;
     }
 
     @Override

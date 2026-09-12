@@ -9,6 +9,7 @@ import com.example.devicemanagement.dto.response.ApiResponse;
 import com.example.devicemanagement.dto.response.DeviceVO;
 import com.example.devicemanagement.dto.response.PageResponse;
 import com.example.devicemanagement.dto.response.TransferRecordVO;
+import com.example.devicemanagement.dto.response.WarrantyOverviewVO;
 import com.example.devicemanagement.service.DeviceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -92,6 +93,14 @@ public class DeviceController {
     public ApiResponse<Map<String, List<DeviceVO>>> getDevicesGroupedByFloor() {
         Map<String, List<DeviceVO>> devices = deviceService.getDevicesGroupedByFloor();
         return ApiResponse.success(devices);
+    }
+
+    @GetMapping("/warranty-overview")
+    public ApiResponse<WarrantyOverviewVO> getWarrantyOverview(
+            @RequestParam(required = false) Long floorId,
+            @RequestParam(required = false) Long roomId) {
+        WarrantyOverviewVO overview = deviceService.getWarrantyOverview(floorId, roomId);
+        return ApiResponse.success(overview);
     }
 
     @PostMapping("/transfer")

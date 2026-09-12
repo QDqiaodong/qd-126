@@ -7,6 +7,7 @@ import com.example.devicemanagement.dto.request.DeviceTransferRequest;
 import com.example.devicemanagement.dto.request.DeviceUpdateRequest;
 import com.example.devicemanagement.dto.response.DeviceVO;
 import com.example.devicemanagement.dto.response.TransferRecordVO;
+import com.example.devicemanagement.dto.response.WarrantyOverviewVO;
 import com.example.devicemanagement.entity.Device;
 
 import java.util.List;
@@ -33,6 +34,8 @@ public interface DeviceService {
     IPage<DeviceVO> getDevicesPage(int pageNum, int pageSize, String deviceType, String deviceName);
 
     Map<String, List<DeviceVO>> getDevicesGroupedByFloor();
+
+    WarrantyOverviewVO getWarrantyOverview(Long floorId, Long roomId);
 
     List<DeviceVO> getDevicesInRoom(Long roomId);
 

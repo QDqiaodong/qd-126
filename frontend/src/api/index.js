@@ -47,6 +47,7 @@ export const deviceApi = {
   getByRoom: roomId => request.get(`/device/room/${roomId}`),
   getPage: (params) => request.get('/device/page', { params }),
   getGrouped: () => request.get('/device/grouped'),
+  getWarrantyOverview: params => request.get('/device/warranty-overview', { params }),
   create: data => request.post('/device', data),
   update: (id, data) => request.put(`/device/${id}`, data),
   delete: id => request.delete(`/device/${id}`),
