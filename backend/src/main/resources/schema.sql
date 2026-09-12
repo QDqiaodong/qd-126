@@ -197,6 +197,27 @@ CREATE TABLE IF NOT EXISTS `room_activity_device` (
     INDEX `idx_device_id` (`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动占用影音设备明细表';
 
+CREATE TABLE IF NOT EXISTS `visit_registration` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '来访单ID',
+    `visit_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '来访单号',
+    `visitor_org` VARCHAR(200) NOT NULL COMMENT '来访单位',
+    `visitor_count` INT NOT NULL DEFAULT 1 COMMENT '预计人数',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `start_time` DATETIME NOT NULL COMMENT '预计开始时间',
+    `end_time` DATETIME NOT NULL COMMENT '预计结束时间',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0待到访 1接待中 2已结束 3已取消（接待中需值班员确认到场）',
+    `checked_in_at` DATETIME DEFAULT NULL COMMENT '值班员确认到场时间',
+    `cancelled_at` DATETIME DEFAULT NULL COMMENT '取消时间',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_time` (`room_id`, `start_time`, `end_time`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_start_end` (`start_time`, `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='来访登记表';
+
 CREATE TABLE IF NOT EXISTS `device_combo` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '影音组合ID',
     `combo_name` VARCHAR(100) NOT NULL UNIQUE COMMENT '组合名称',
