@@ -45,11 +45,12 @@
         <el-table-column prop="createdAt" label="建档时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="260">
           <template #default="{ row }">
             <el-button @click="goToDetail(row.id)" size="small">详情</el-button>
             <el-button @click="goToEdit(row.id)" size="small" type="primary">编辑</el-button>
             <el-button @click="handleTransfer(row)" size="small" type="success">调配</el-button>
+            <el-button v-if="row.currentRoomId" @click="handleEmergencyReplace(row)" size="small" type="danger">应急替换</el-button>
             <el-button @click="handleDelete(row.id)" size="small" type="danger">删除</el-button>
           </template>
         </el-table-column>
@@ -123,6 +124,43 @@
         <el-button @click="confirmBatchTransfer" type="primary">确认批量调配</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="emergencyVisible" title="接待中故障应急替换" width="560px">
+      <el-alert type="warning" :closable="false" class="emergency-tip"
+        title="同楼层备用机立刻顶上，原设备转为待维修并卸下，不能再调往其他接待室。" />
+      <el-form :model="emergencyForm" label-width="90px">
+        <el-form-item label="故障设备">
+          <el-tag type="danger">{{ emergencyFaulty && emergencyFaulty.deviceCode }}</el-tag>
+          <span class="emergency-device-name">{{ emergencyFaulty && emergencyFaulty.deviceName }}</span>
+          <span class="emergency-location">（{{ emergencyFaulty && emergencyFaulty.currentRoomName }}）</span>
+        </el-form-item>
+        <el-form-item label="备用机" required>
+          <el-select v-model="emergencyForm.spareDeviceId" class="full-width" placeholder="仅同楼层、未上墙的正常备用机"
+            :loading="emergencySparesLoading">
+            <el-option v-for="s in emergencySpares" :key="s.id"
+              :label="`${s.deviceCode} ${s.deviceName}${s.sameDeviceType ? '（同类型' + (s.sameType ? '·同型号' : '') + '）' : ''}`"
+              :value="s.id" />
+          </el-select>
+          <div v-if="!emergencySparesLoading && emergencySpares.length === 0" class="emergency-empty">
+            同楼层暂无可调用的备用机（需要状态正常且未分配接待室）
+          </div>
+        </el-form-item>
+        <el-form-item label="故障现象" required>
+          <el-input v-model="emergencyForm.faultPhenomenon" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请描述故障现象" />
+        </el-form-item>
+        <el-form-item label="替换人" required>
+          <el-input v-model="emergencyForm.operator" placeholder="执行替换的值班员" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="emergencyForm.remark" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="emergencyVisible = false">取消</el-button>
+        <el-button @click="confirmEmergencyReplace" type="danger" :loading="emergencySubmitting">确认替换</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -131,7 +169,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, Plus, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deviceApi, floorApi, roomApi, specTemplateApi } from '../api'
+import { deviceApi, floorApi, roomApi, specTemplateApi, replacementApi } from '../api'
 
 const DEFAULT_TYPES = ['电视', '音响', '麦克风', '投影仪', '其他']
 
@@ -263,6 +301,74 @@ const handleBatchTransfer = () => {
   batchTransferDialogVisible.value = true
 }
 
+// ---------------- 接待中故障应急替换 ----------------
+
+const emergencyVisible = ref(false)
+const emergencySubmitting = ref(false)
+const emergencySparesLoading = ref(false)
+const emergencyFaulty = ref(null)
+const emergencySpares = ref([])
+const emergencyForm = ref({
+  faultyDeviceId: null,
+  spareDeviceId: null,
+  faultPhenomenon: '',
+  operator: '',
+  remark: ''
+})
+
+const handleEmergencyReplace = async (row) => {
+  emergencyForm.value = {
+    faultyDeviceId: row.id,
+    spareDeviceId: null,
+    faultPhenomenon: '',
+    operator: '',
+    remark: ''
+  }
+  emergencyFaulty.value = row
+  emergencySpares.value = []
+  emergencyVisible.value = true
+  emergencySparesLoading.value = true
+  try {
+    emergencySpares.value = await replacementApi.getSpares(row.id)
+  } catch (error) {
+    ElMessage.error(error.message || '加载同楼层备用机失败')
+  } finally {
+    emergencySparesLoading.value = false
+  }
+}
+
+const confirmEmergencyReplace = async () => {
+  if (!emergencyForm.value.spareDeviceId) {
+    ElMessage.warning('请选择一台同楼层备用机')
+    return
+  }
+  if (!emergencyForm.value.faultPhenomenon.trim()) {
+    ElMessage.warning('请填写故障现象')
+    return
+  }
+  if (!emergencyForm.value.operator.trim()) {
+    ElMessage.warning('请填写替换人')
+    return
+  }
+  emergencySubmitting.value = true
+  try {
+    await replacementApi.create({
+      faultyDeviceId: emergencyForm.value.faultyDeviceId,
+      spareDeviceId: emergencyForm.value.spareDeviceId,
+      faultPhenomenon: emergencyForm.value.faultPhenomenon.trim(),
+      operator: emergencyForm.value.operator.trim(),
+      remark: emergencyForm.value.remark
+    })
+    ElMessage.success('备用机已顶上，原设备已转待维修')
+    emergencyVisible.value = false
+    loadDevices()
+  } catch (error) {
+    ElMessage.error(error.message || '替换失败')
+  } finally {
+    emergencySubmitting.value = false
+  }
+}
+
 const handleDelete = async (id) => {
   try {
     await ElMessageBox.confirm('确定要删除该设备吗？', '提示', { type: 'warning' })
@@ -386,6 +492,30 @@ onMounted(() => {
 .action-bar {
   display: flex;
   gap: 12px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.emergency-tip {
+  margin-bottom: 16px;
+}
+
+.emergency-device-name {
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+.emergency-location {
+  color: #999;
+  font-size: 13px;
+}
+
+.emergency-empty {
+  color: #e6a23c;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .pagination {

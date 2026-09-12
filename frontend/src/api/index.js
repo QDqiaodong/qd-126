@@ -90,3 +90,11 @@ export const activityApi = {
   finish: id => request.post(`/activity/${id}/finish`),
   getRoomOccupancies: params => request.get('/activity/room-occupancy', { params })
 }
+
+export const replacementApi = {
+  create: data => request.post('/replacement', data),
+  getSpares: faultyDeviceId => request.get('/replacement/spares', { params: { faultyDeviceId } }),
+  getPage: params => request.get('/replacement', { params }),
+  getById: id => request.get(`/replacement/${id}`),
+  resolve: (id, data) => request.post(`/replacement/${id}/resolve`, data)
+}

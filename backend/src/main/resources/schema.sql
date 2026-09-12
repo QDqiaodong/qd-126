@@ -154,6 +154,36 @@ CREATE TABLE IF NOT EXISTS `room_activity` (
     INDEX `idx_start_end` (`start_time`, `end_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室活动占用表';
 
+CREATE TABLE IF NOT EXISTS `device_replacement` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '替换记录ID',
+    `replacement_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '替换单号',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '楼层ID（接待室所在楼层，便于筛选）',
+    `faulty_device_id` BIGINT NOT NULL COMMENT '故障设备ID（卸下）',
+    `faulty_device_code` VARCHAR(50) NOT NULL COMMENT '故障设备编号（快照）',
+    `faulty_device_name` VARCHAR(100) NOT NULL COMMENT '故障设备名称（快照）',
+    `faulty_device_type` VARCHAR(50) NOT NULL COMMENT '故障设备类型（快照）',
+    `spare_device_id` BIGINT NOT NULL COMMENT '备用设备ID（换上）',
+    `spare_device_code` VARCHAR(50) NOT NULL COMMENT '备用设备编号（快照）',
+    `spare_device_name` VARCHAR(100) NOT NULL COMMENT '备用设备名称（快照）',
+    `spare_device_type` VARCHAR(50) NOT NULL COMMENT '备用设备类型（快照）',
+    `fault_phenomenon` VARCHAR(500) NOT NULL COMMENT '故障现象',
+    `operator` VARCHAR(50) NOT NULL COMMENT '替换操作人（值班员）',
+    `replacement_time` DATETIME NOT NULL COMMENT '替换时间',
+    `process_result` TINYINT NOT NULL DEFAULT 1 COMMENT '处理结果 1待维修 2已修复 3已报废',
+    `process_remark` VARCHAR(500) DEFAULT NULL COMMENT '处理备注（维修/报废说明）',
+    `processed_by` VARCHAR(50) DEFAULT NULL COMMENT '处理登记人',
+    `processed_at` DATETIME DEFAULT NULL COMMENT '处理登记时间',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_floor_room` (`floor_id`, `room_id`),
+    INDEX `idx_faulty_device` (`faulty_device_id`),
+    INDEX `idx_spare_device` (`spare_device_id`),
+    INDEX `idx_process_result` (`process_result`),
+    INDEX `idx_replacement_time` (`replacement_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待中影音设备故障应急替换记录表';
+
 CREATE TABLE IF NOT EXISTS `room_activity_device` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '占用明细ID',
     `activity_id` BIGINT NOT NULL COMMENT '活动ID',

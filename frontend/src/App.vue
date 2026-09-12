@@ -35,6 +35,10 @@
             <el-icon><Calendar /></el-icon>
             <span>接待室活动</span>
           </el-menu-item>
+          <el-menu-item index="/replacement">
+            <el-icon><Switch /></el-icon>
+            <span>故障应急替换</span>
+          </el-menu-item>
           <el-menu-item index="/transfer">
             <el-icon><RefreshLeft /></el-icon>
             <span>流转记录</span>
@@ -70,7 +74,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar, AlarmClock } from '@element-plus/icons-vue'
+import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar, AlarmClock, Switch } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -89,6 +93,7 @@ const titleMap = {
   '/floor': '楼层管理',
   '/room': '接待室管理',
   '/activity': '接待室活动占用',
+  '/replacement': '故障应急替换',
   '/transfer': '流转记录',
   '/inventory': '盘点批次',
   '/spec-template': '设备规格模板管理',
@@ -117,6 +122,12 @@ router.beforeEach((to, from, next) => {
   if (to.path.startsWith('/activity')) {
     activeMenu.value = '/activity'
     pageTitle.value = to.path === '/activity' ? '接待室活动占用' : '活动详情'
+    next()
+    return
+  }
+  if (to.path.startsWith('/replacement')) {
+    activeMenu.value = '/replacement'
+    pageTitle.value = to.path === '/replacement' ? '故障应急替换' : '替换记录详情'
     next()
     return
   }

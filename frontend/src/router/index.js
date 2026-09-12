@@ -75,6 +75,16 @@ const routes = [
     path: '/activity/:id',
     name: 'ActivityDetail',
     component: () => import('../views/ActivityDetail.vue')
+  },
+  {
+    path: '/replacement',
+    name: 'ReplacementList',
+    component: () => import('../views/ReplacementList.vue')
+  },
+  {
+    path: '/replacement/:id',
+    name: 'ReplacementDetail',
+    component: () => import('../views/ReplacementDetail.vue')
   }
 ]
 

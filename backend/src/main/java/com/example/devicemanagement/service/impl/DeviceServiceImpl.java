@@ -119,6 +119,13 @@ public class DeviceServiceImpl implements DeviceService {
         if (request.getCurrentRoomId() == null || !request.getCurrentRoomId().equals(oldRoomId)) {
             roomActivityService.assertDeviceTransferable(device.getId());
         }
+        // 待维修设备已卸下送修，不能再被分配到任何接待室
+        if (request.getCurrentRoomId() != null
+                && Integer.valueOf(2).equals(request.getStatus() == null ? device.getStatus() : request.getStatus())
+                && !request.getCurrentRoomId().equals(oldRoomId)) {
+            throw new IllegalArgumentException("设备「" + device.getDeviceName()
+                    + "」处于待维修状态，修复前不能再调配到其他接待室");
+        }
 
         device.setDeviceName(request.getDeviceName());
         device.setDeviceType(request.getDeviceType());
@@ -353,6 +360,11 @@ public class DeviceServiceImpl implements DeviceService {
         // 活动进行中的设备不得再被调配到其他房间
         if (request.getToRoomId() == null || !request.getToRoomId().equals(device.getCurrentRoomId())) {
             roomActivityService.assertDeviceTransferable(device.getId());
+        }
+        // 待维修设备已卸下送修，不能再调去别的接待室
+        if (request.getToRoomId() != null && Integer.valueOf(2).equals(device.getStatus())) {
+            throw new IllegalArgumentException("设备「" + device.getDeviceName()
+                    + "」处于待维修状态，修复前不能再调配到其他接待室");
         }
 
         Long oldFloorId = device.getCurrentFloorId();
