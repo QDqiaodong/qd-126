@@ -280,6 +280,49 @@ CREATE TABLE IF NOT EXISTS `device_combo_record_item` (
     INDEX `idx_device_id` (`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='影音组合套用结果明细表';
 
+CREATE TABLE IF NOT EXISTS `emergency_light` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '应急灯ID',
+    `light_code` VARCHAR(50) NOT NULL UNIQUE COMMENT '应急灯编号',
+    `light_name` VARCHAR(100) NOT NULL COMMENT '应急灯名称/位置说明',
+    `room_id` BIGINT NOT NULL COMMENT '所在接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所在楼层ID（冗余，便于按楼层筛选）',
+    `last_check_date` DATE DEFAULT NULL COMMENT '上次检查日期（行政登记或补检合格关闭时写入）',
+    `next_due_date` DATE DEFAULT NULL COMMENT '下次到期日期',
+    `interval_days` INT NOT NULL DEFAULT 30 COMMENT '检查周期（天），补检关闭按此顺延下次到期',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
+    `created_by` VARCHAR(50) DEFAULT NULL COMMENT '登记人（行政）',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_id` (`room_id`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_next_due` (`next_due_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室应急灯登记表';
+
+CREATE TABLE IF NOT EXISTS `emergency_light_inspection` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '检查单ID',
+    `inspection_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '检查单号',
+    `light_id` BIGINT NOT NULL COMMENT '应急灯ID',
+    `light_code` VARCHAR(50) NOT NULL COMMENT '应急灯编号（快照）',
+    `light_name` VARCHAR(100) NOT NULL COMMENT '应急灯名称（快照）',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID（快照）',
+    `floor_id` BIGINT NOT NULL COMMENT '楼层ID（冗余快照）',
+    `inspector` VARCHAR(50) NOT NULL COMMENT '检查人',
+    `inspect_date` DATE NOT NULL COMMENT '检查日期',
+    `check_result` TINYINT DEFAULT NULL COMMENT '检查结果 1合格 2不合格，NULL表示检查单未关闭',
+    `result_remark` VARCHAR(500) DEFAULT NULL COMMENT '检查结果说明（关闭时必填结果字段）',
+    `closed_by` VARCHAR(50) DEFAULT NULL COMMENT '关闭登记人',
+    `closed_at` DATETIME DEFAULT NULL COMMENT '关闭时间',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '开单备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `open_light_key` BIGINT GENERATED ALWAYS AS (CASE WHEN `check_result` IS NULL THEN `light_id` ELSE NULL END) VIRTUAL COMMENT '未关闭检查单唯一约束用生成列',
+    UNIQUE KEY `uk_open_light` (`open_light_key`),
+    INDEX `idx_light_id` (`light_id`),
+    INDEX `idx_room_floor` (`floor_id`, `room_id`),
+    INDEX `idx_check_result` (`check_result`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应急灯检查单（到期补检）';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),
