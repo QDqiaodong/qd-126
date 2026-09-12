@@ -98,3 +98,14 @@ export const replacementApi = {
   getById: id => request.get(`/replacement/${id}`),
   resolve: (id, data) => request.post(`/replacement/${id}/resolve`, data)
 }
+
+export const comboApi = {
+  getAll: status => request.get('/combo', { params: status !== undefined ? { status } : {} }),
+  getById: id => request.get(`/combo/${id}`),
+  create: data => request.post('/combo', data),
+  update: (id, data) => request.put(`/combo/${id}`, data),
+  delete: id => request.delete(`/combo/${id}`),
+  apply: (id, data) => request.post(`/combo/${id}/apply`, data),
+  getRecords: params => request.get('/combo/records', { params }),
+  getRecordById: id => request.get(`/combo/records/${id}`)
+}

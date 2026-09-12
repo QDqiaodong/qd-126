@@ -85,6 +85,21 @@ const routes = [
     path: '/replacement/:id',
     name: 'ReplacementDetail',
     component: () => import('../views/ReplacementDetail.vue')
+  },
+  {
+    path: '/combo',
+    name: 'ComboList',
+    component: () => import('../views/ComboList.vue')
+  },
+  {
+    path: '/combo-record',
+    name: 'ComboRecordList',
+    component: () => import('../views/ComboRecordList.vue')
+  },
+  {
+    path: '/combo-record/:id',
+    name: 'ComboRecordDetail',
+    component: () => import('../views/ComboRecordDetail.vue')
   }
 ]
 

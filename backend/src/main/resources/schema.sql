@@ -197,6 +197,68 @@ CREATE TABLE IF NOT EXISTS `room_activity_device` (
     INDEX `idx_device_id` (`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动占用影音设备明细表';
 
+CREATE TABLE IF NOT EXISTS `device_combo` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '影音组合ID',
+    `combo_name` VARCHAR(100) NOT NULL UNIQUE COMMENT '组合名称',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '组合说明',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
+    `created_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人（管理员）',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='常用影音组合表';
+
+CREATE TABLE IF NOT EXISTS `device_combo_item` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '组合明细ID',
+    `combo_id` BIGINT NOT NULL COMMENT '所属组合ID',
+    `device_id` BIGINT NOT NULL COMMENT '设备ID',
+    `device_code` VARCHAR(50) NOT NULL COMMENT '设备编号（快照）',
+    `device_name` VARCHAR(100) NOT NULL COMMENT '设备名称（快照）',
+    `device_type` VARCHAR(50) NOT NULL COMMENT '设备类型（快照）',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    UNIQUE KEY `uk_combo_device` (`combo_id`, `device_id`),
+    INDEX `idx_combo_id` (`combo_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='常用影音组合设备明细表';
+
+CREATE TABLE IF NOT EXISTS `device_combo_record` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '套用记录ID',
+    `record_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '套用单号',
+    `combo_id` BIGINT NOT NULL COMMENT '组合ID',
+    `combo_name` VARCHAR(100) NOT NULL COMMENT '组合名称（快照）',
+    `room_id` BIGINT NOT NULL COMMENT '目标接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '目标楼层ID（冗余，便于筛选）',
+    `operator` VARCHAR(50) NOT NULL COMMENT '套用人（值班员）',
+    `apply_time` DATETIME NOT NULL COMMENT '套用时间',
+    `required_count` INT NOT NULL DEFAULT 0 COMMENT '组合设备总数',
+    `applied_count` INT NOT NULL DEFAULT 0 COMMENT '本次调入台数',
+    `present_count` INT NOT NULL DEFAULT 0 COMMENT '套用前已在房间台数',
+    `skipped_count` INT NOT NULL DEFAULT 0 COMMENT '跳过台数',
+    `before_snapshot` TEXT DEFAULT NULL COMMENT '套用前接待室设备清单快照JSON',
+    `after_snapshot` TEXT DEFAULT NULL COMMENT '套用后接待室设备清单快照JSON',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX `idx_floor_room` (`floor_id`, `room_id`),
+    INDEX `idx_combo_id` (`combo_id`),
+    INDEX `idx_apply_time` (`apply_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='影音组合一键套用记录表';
+
+CREATE TABLE IF NOT EXISTS `device_combo_record_item` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '套用结果明细ID',
+    `record_id` BIGINT NOT NULL COMMENT '套用记录ID',
+    `device_id` BIGINT NOT NULL COMMENT '设备ID',
+    `device_code` VARCHAR(50) NOT NULL COMMENT '设备编号（快照）',
+    `device_name` VARCHAR(100) NOT NULL COMMENT '设备名称（快照）',
+    `device_type` VARCHAR(50) NOT NULL COMMENT '设备类型（快照）',
+    `result` TINYINT NOT NULL COMMENT '套用结果 1调入 2已在房间 3跳过',
+    `skip_reason` VARCHAR(500) DEFAULT NULL COMMENT '跳过原因（在别的房间/待修/活动占用等）',
+    `from_room_id` BIGINT DEFAULT NULL COMMENT '套用前所在接待室ID',
+    `from_room_name` VARCHAR(100) DEFAULT NULL COMMENT '套用前所在接待室名称（快照）',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX `idx_record_id` (`record_id`),
+    INDEX `idx_device_id` (`device_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='影音组合套用结果明细表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),

@@ -40,4 +40,9 @@ public interface RoomActivityService {
      * 设备是否被进行中的活动占用；设备调配前调用，占用则拒绝调配。
      */
     void assertDeviceTransferable(Long deviceId);
+
+    /**
+     * 设备被进行中的活动占用时返回该活动名称，未占用返回 null。用于组合套用跳过原因展示。
+     */
+    String getBlockingActivityName(Long deviceId);
 }

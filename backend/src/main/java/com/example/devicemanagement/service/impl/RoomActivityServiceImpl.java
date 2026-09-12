@@ -329,14 +329,23 @@ public class RoomActivityServiceImpl implements RoomActivityService {
 
     @Override
     public void assertDeviceTransferable(Long deviceId) {
+        String activityName = getBlockingActivityName(deviceId);
+        if (activityName != null) {
+            throw new IllegalArgumentException("设备正被进行中的活动「" + activityName
+                    + "」使用，活动结束前不可调配");
+        }
+    }
+
+    @Override
+    public String getBlockingActivityName(Long deviceId) {
         if (deviceId == null) {
-            return;
+            return null;
         }
         LambdaQueryWrapper<RoomActivityDevice> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RoomActivityDevice::getDeviceId, deviceId);
         List<RoomActivityDevice> rows = activityDeviceMapper.selectList(wrapper);
         if (rows.isEmpty()) {
-            return;
+            return null;
         }
         LocalDateTime now = LocalDateTime.now();
         List<Long> activityIds = rows.stream().map(RoomActivityDevice::getActivityId).distinct().collect(Collectors.toList());
@@ -344,10 +353,10 @@ public class RoomActivityServiceImpl implements RoomActivityService {
         for (RoomActivity activity : activities) {
             refreshOne(activity, now);
             if (Integer.valueOf(RoomActivity.STATUS_ONGOING).equals(activity.getStatus())) {
-                throw new IllegalArgumentException("设备正被进行中的活动「" + activity.getActivityName()
-                        + "」使用，活动结束前不可调配");
+                return activity.getActivityName();
             }
         }
+        return null;
     }
 
     // ---------------- 私有辅助方法 ----------------
