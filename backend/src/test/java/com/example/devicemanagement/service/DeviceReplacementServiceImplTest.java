@@ -184,6 +184,22 @@ class DeviceReplacementServiceImplTest {
     }
 
     @Test
+    void createReplacement_persistsFaultyUnassignmentWithExplicitNullSet() {
+        // 回归：updateById 默认 NOT_NULL 策略会跳过 null，导致 current_room_id 无法清空、
+        // 故障机仍挂在原接待室，修复登记为正常后又能被勾选进新活动。
+        replacementService.createReplacement(request());
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Device>> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(deviceMapper).update(eq(null), captor.capture());
+        String sqlSet = captor.getValue().getSqlSet();
+        assertTrue(sqlSet.contains("current_room_id=null"),
+                "故障机接待室必须显式置 NULL，实际 SET 片段：" + sqlSet);
+        // 故障机不能再走会丢弃 null 的 updateById
+        verify(deviceMapper, never()).updateById(argThat(d -> d.getId().equals(101L)));
+    }
+
+    @Test
     void createReplacement_swapsOngoingActivityDeviceRow() {
         RoomActivity activity = new RoomActivity();
         activity.setId(500L);
@@ -358,6 +374,30 @@ class DeviceReplacementServiceImplTest {
         replacementService.resolveResult(id, resolveReq);
 
         assertEquals(0, faulty.getStatus());
+    }
+
+    @Test
+    void resolveResult_repaired_unassignsFaultyDeviceLeftInRoomByStaleData() {
+        replacementService.createReplacement(request());
+        Long id = stored.get(0).getId();
+
+        // 模拟历史脏数据：之前的替换未把 current_room_id 置空，设备仍挂在原接待室
+        faulty.setCurrentRoomId(10L);
+
+        ReplacementResultRequest resolveReq = new ReplacementResultRequest();
+        resolveReq.setProcessResult(DeviceReplacement.RESULT_REPAIRED);
+        resolveReq.setProcessRemark("更换音头后测试正常");
+        resolveReq.setProcessedBy("维修员乙");
+
+        replacementService.resolveResult(id, resolveReq);
+
+        // 状态恢复正常，但必须卸下接待室（回楼层备用），不能再被该接待室勾选占用
+        assertEquals(1, faulty.getStatus());
+        assertNull(faulty.getCurrentRoomId());
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Device>> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(deviceMapper, atLeastOnce()).update(eq(null), captor.capture());
+        assertTrue(captor.getValue().getSqlSet().contains("current_room_id=null"));
     }
 
     @Test

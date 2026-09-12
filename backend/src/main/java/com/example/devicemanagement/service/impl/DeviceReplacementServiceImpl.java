@@ -1,6 +1,7 @@
 package com.example.devicemanagement.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.devicemanagement.dto.request.DeviceReplacementRequest;
@@ -132,10 +133,15 @@ public class DeviceReplacementServiceImpl implements DeviceReplacementService {
         Long oldFaultyFloor = faulty.getCurrentFloorId();
         String remark = request.getRemark();
 
-        // 1. 原设备改为待维修、卸下接待室，后续不能再调去别的接待室
+        // 1. 原设备改为待维修、卸下接待室，后续不能再调去别的接待室。
+        // 注意：updateById 默认 NOT_NULL 策略会跳过 null 字段，current_room_id 无法清空，
+        // 必须用 UpdateWrapper#set 显式置 NULL，否则故障机仍挂在原接待室、修复后又能被占用。
         faulty.setStatus(DEVICE_STATUS_WAIT_REPAIR);
         faulty.setCurrentRoomId(null);
-        deviceMapper.updateById(faulty);
+        deviceMapper.update(null, new LambdaUpdateWrapper<Device>()
+                .eq(Device::getId, faulty.getId())
+                .set(Device::getStatus, DEVICE_STATUS_WAIT_REPAIR)
+                .set(Device::getCurrentRoomId, null));
 
         // 2. 备用机转入该接待室
         spare.setCurrentFloorId(floorId);
@@ -302,10 +308,16 @@ public class DeviceReplacementServiceImpl implements DeviceReplacementService {
         // 同步原故障设备状态，刷新后替换记录与设备状态保持一致
         Device faulty = deviceMapper.selectById(replacement.getFaultyDeviceId());
         if (faulty != null) {
-            faulty.setStatus(Integer.valueOf(DeviceReplacement.RESULT_REPAIRED).equals(result)
-                    ? DEVICE_STATUS_NORMAL : DEVICE_STATUS_BROKEN);
-            // 修复后仍留在楼层备用（未分配接待室），可再次被选为备用机
-            deviceMapper.updateById(faulty);
+            int newStatus = Integer.valueOf(DeviceReplacement.RESULT_REPAIRED).equals(result)
+                    ? DEVICE_STATUS_NORMAL : DEVICE_STATUS_BROKEN;
+            faulty.setStatus(newStatus);
+            faulty.setCurrentRoomId(null);
+            // 卸下的故障机不得再留在任何接待室：修复后回楼层备用、报废后不可使用。
+            // 历史替换单若因置空未生效仍挂在原接待室，登记结果时一并卸下，避免“已修复”后又能被占用。
+            deviceMapper.update(null, new LambdaUpdateWrapper<Device>()
+                    .eq(Device::getId, faulty.getId())
+                    .set(Device::getStatus, newStatus)
+                    .set(Device::getCurrentRoomId, null));
         }
 
         return toVO(replacement);
