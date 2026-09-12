@@ -323,6 +323,29 @@ CREATE TABLE IF NOT EXISTS `emergency_light_inspection` (
     INDEX `idx_check_result` (`check_result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应急灯检查单（到期补检）';
 
+CREATE TABLE IF NOT EXISTS `welcome_board` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '欢迎牌排期ID',
+    `board_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '欢迎牌单号',
+    `board_text` VARCHAR(300) NOT NULL COMMENT '欢迎牌文案',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `mount_time` DATETIME NOT NULL COMMENT '计划上墙时间',
+    `planned_remove_time` DATETIME NOT NULL COMMENT '计划撤下时间（到期未撤标待撤）',
+    `registrar` VARCHAR(50) NOT NULL COMMENT '登记人（行政）',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0待上墙 1已上墙 2已撤下（按当前时间懒推进，撤下必须有回执）',
+    `mounted_at` DATETIME DEFAULT NULL COMMENT '实际上墙时间',
+    `removed_at` DATETIME DEFAULT NULL COMMENT '实际撤下时间',
+    `remove_receipt` VARCHAR(500) DEFAULT NULL COMMENT '撤下回执（撤下必填）',
+    `removed_by` VARCHAR(50) DEFAULT NULL COMMENT '撤下回执登记人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_time` (`room_id`, `mount_time`, `planned_remove_time`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_planned_remove` (`status`, `planned_remove_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室欢迎牌排期表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),

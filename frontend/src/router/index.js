@@ -72,6 +72,11 @@ const routes = [
     component: () => import('../views/ActivityList.vue')
   },
   {
+    path: '/welcome-board',
+    name: 'WelcomeBoardList',
+    component: () => import('../views/WelcomeBoardList.vue')
+  },
+  {
     path: '/activity/:id',
     name: 'ActivityDetail',
     component: () => import('../views/ActivityDetail.vue')

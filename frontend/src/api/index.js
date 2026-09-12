@@ -99,6 +99,15 @@ export const replacementApi = {
   resolve: (id, data) => request.post(`/replacement/${id}/resolve`, data)
 }
 
+export const welcomeBoardApi = {
+  create: data => request.post('/welcome-board', data),
+  getPage: params => request.get('/welcome-board', { params }),
+  getById: id => request.get(`/welcome-board/${id}`),
+  getOverdue: () => request.get('/welcome-board/overdue'),
+  remove: (id, data) => request.post(`/welcome-board/${id}/remove`, data),
+  getRoomAvailability: params => request.get('/welcome-board/room-availability', { params })
+}
+
 export const comboApi = {
   getAll: status => request.get('/combo', { params: status !== undefined ? { status } : {} }),
   getById: id => request.get(`/combo/${id}`),
