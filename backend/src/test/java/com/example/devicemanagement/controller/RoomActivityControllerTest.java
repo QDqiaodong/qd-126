@@ -7,17 +7,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -82,5 +85,23 @@ class RoomActivityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("活动已结束，占用设备已释放"))
                 .andExpect(jsonPath("$.data.status").value(2));
+    }
+
+    @Test
+    void updatePassesPayloadAndReturnsUpdatedActivity() throws Exception {
+        RoomActivityVO updated = buildActivity();
+        updated.setActivityName("改名发布会");
+        when(activityService.updateActivity(eq(1L), any())).thenReturn(updated);
+
+        mockMvc.perform(put("/api/activity/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activityName\":\"改名发布会\",\"roomId\":10,"
+                                + "\"startTime\":\"2026-09-12T10:00:00\",\"endTime\":\"2026-09-12T12:00:00\","
+                                + "\"deviceIds\":[101],\"manager\":\"张三\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("活动占用已更新"))
+                .andExpect(jsonPath("$.data.activityName").value("改名发布会"));
+
+        verify(activityService).updateActivity(eq(1L), any());
     }
 }

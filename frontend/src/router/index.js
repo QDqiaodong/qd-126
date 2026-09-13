@@ -72,6 +72,11 @@ const routes = [
     component: () => import('../views/ActivityList.vue')
   },
   {
+    path: '/quiet-period',
+    name: 'QuietPeriodList',
+    component: () => import('../views/QuietPeriodList.vue')
+  },
+  {
     path: '/welcome-board',
     name: 'WelcomeBoardList',
     component: () => import('../views/WelcomeBoardList.vue')

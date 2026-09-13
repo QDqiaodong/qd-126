@@ -12,6 +12,8 @@ import com.example.devicemanagement.entity.Floor;
 import com.example.devicemanagement.entity.ReceptionRoom;
 import com.example.devicemanagement.entity.RoomActivity;
 import com.example.devicemanagement.entity.RoomActivityDevice;
+import com.example.devicemanagement.entity.RoomQuietPeriod;
+import com.example.devicemanagement.exception.QuietPeriodConflictException;
 import com.example.devicemanagement.mapper.DeviceMapper;
 import com.example.devicemanagement.mapper.RoomActivityDeviceMapper;
 import com.example.devicemanagement.mapper.RoomActivityMapper;
@@ -36,6 +38,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +59,9 @@ class RoomActivityServiceImplTest {
 
     @Mock
     private ReceptionRoomService roomService;
+
+    @Mock
+    private RoomQuietPeriodService quietPeriodService;
 
     @InjectMocks
     private RoomActivityServiceImpl activityService;
@@ -154,6 +160,11 @@ class RoomActivityServiceImplTest {
                 row.setId((long) storedRows.size() + 1);
             }
             storedRows.add(row);
+            return 1;
+        });
+        when(activityDeviceMapper.delete(any())).thenAnswer(inv -> {
+            // 修改活动时全量替换占用明细：测试场景仅按活动清理
+            storedRows.clear();
             return 1;
         });
         when(activityDeviceMapper.selectList(any())).thenAnswer(inv -> new ArrayList<>(storedRows));
@@ -346,6 +357,126 @@ class RoomActivityServiceImplTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> activityService.createActivity(req));
         assertTrue(ex.getMessage().contains("隔壁培训"));
         assertEquals(1, storedActivities.size());
+    }
+
+    @Test
+    void createBlocksWhenQuietPeriodOverlapsAndCarriesReason() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime start = now.plusDays(1);
+        LocalDateTime end = now.plusDays(1).plusHours(2);
+        RoomQuietPeriod quiet = quietPeriod(301L, "设备检修", start.plusMinutes(30), end.plusHours(1));
+        when(quietPeriodService.findOverlapping(eq(10L), any(), any())).thenReturn(List.of(quiet));
+
+        RoomActivityCreateRequest req = request(start, end, 101L);
+        QuietPeriodConflictException ex = assertThrows(QuietPeriodConflictException.class,
+                () -> activityService.createActivity(req));
+        assertTrue(ex.getMessage().contains("静音"));
+        assertTrue(ex.getMessage().contains("设备检修"));
+        assertTrue(ex.getMessage().contains("301接待室"));
+        // 拦截后不应落库
+        assertEquals(0, storedActivities.size());
+    }
+
+    @Test
+    void createAllowedWhenRoomHasNoQuietPeriod() {
+        LocalDateTime now = LocalDateTime.now();
+        // 默认 mock 返回空列表：未设静音的接待室正常占用
+        RoomActivityVO vo = activityService.createActivity(
+                request(now.plusDays(1), now.plusDays(1).plusHours(2), 101L));
+        assertNotNull(vo.getId());
+        assertEquals(1, storedActivities.size());
+    }
+
+    @Test
+    void updateActivityReplacesTimeAndDevices() {
+        LocalDateTime now = LocalDateTime.now();
+        activityService.createActivity(request(now.plusDays(1), now.plusDays(1).plusHours(2), 101L));
+        Long activityId = captured.getId();
+        assertEquals(1, storedRows.size());
+
+        RoomActivityCreateRequest update = request(now.plusDays(2), now.plusDays(2).plusHours(3), 101L, 102L);
+        update.setActivityName("改名发布会");
+        update.setManager("李四");
+        RoomActivityVO vo = activityService.updateActivity(activityId, update);
+
+        assertEquals("改名发布会", vo.getActivityName());
+        assertEquals("李四", vo.getManager());
+        assertEquals(now.plusDays(2), vo.getStartTime());
+        assertEquals(2, vo.getDeviceCount());
+        // 占用明细全量替换
+        assertEquals(2, storedRows.size());
+        assertTrue(storedRows.stream().anyMatch(r -> r.getDeviceId() == 102L));
+        // 仍只有一条活动记录
+        assertEquals(1, storedActivities.size());
+    }
+
+    @Test
+    void updateBlocksWhenQuietPeriodOverlaps() {
+        LocalDateTime now = LocalDateTime.now();
+        activityService.createActivity(request(now.plusDays(1), now.plusDays(1).plusHours(2), 101L));
+        Long activityId = captured.getId();
+
+        RoomQuietPeriod quiet = quietPeriod(302L, "重要会议保障",
+                now.plusDays(2), now.plusDays(2).plusHours(4));
+        when(quietPeriodService.findOverlapping(eq(10L), any(), any())).thenReturn(List.of(quiet));
+
+        RoomActivityCreateRequest update = request(now.plusDays(2).plusHours(1), now.plusDays(2).plusHours(3), 101L);
+        QuietPeriodConflictException ex = assertThrows(QuietPeriodConflictException.class,
+                () -> activityService.updateActivity(activityId, update));
+        assertTrue(ex.getMessage().contains("重要会议保障"));
+        // 拦截后原活动保持不变
+        assertEquals("客户参观", captured.getActivityName());
+        assertEquals(now.plusDays(1), captured.getStartTime());
+    }
+
+    @Test
+    void updateRejectsOngoingOrEndedActivity() {
+        LocalDateTime now = LocalDateTime.now();
+        // 已开始的活动：不改历史
+        activityService.createActivity(request(now.minusMinutes(10), now.plusHours(2), 101L));
+        Long ongoingId = captured.getId();
+        assertEquals(RoomActivity.STATUS_ONGOING, captured.getStatus());
+
+        RoomActivityCreateRequest update = request(now.plusDays(1), now.plusDays(1).plusHours(1), 101L);
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.updateActivity(ongoingId, update));
+        assertTrue(ex.getMessage().contains("已开始"));
+
+        // 已结束的活动同样不可改
+        activityService.finishActivity(ongoingId);
+        assertThrows(IllegalArgumentException.class,
+                () -> activityService.updateActivity(ongoingId, update));
+    }
+
+    @Test
+    void detailHintsQuietOverlapForOngoingActivityWithoutChangingHistory() {
+        LocalDateTime now = LocalDateTime.now();
+        activityService.createActivity(request(now.minusMinutes(10), now.plusHours(2), 101L));
+        Long activityId = captured.getId();
+        assertEquals(RoomActivity.STATUS_ONGOING, captured.getStatus());
+
+        // 活动开始后才登记的静音时段与活动重叠：只提示，不改历史
+        RoomQuietPeriod quiet = quietPeriod(303L, "设备检修", now, now.plusHours(1));
+        when(quietPeriodService.findOverlapping(eq(10L), any(), any())).thenReturn(List.of(quiet));
+
+        RoomActivityVO detail = activityService.getActivityById(activityId);
+        assertTrue(detail.getConflicts().stream().anyMatch(c -> c.contains("静音") && c.contains("设备检修")));
+        // 历史活动数据不被修改
+        assertEquals(RoomActivity.STATUS_ONGOING, captured.getStatus());
+        assertEquals("客户参观", captured.getActivityName());
+        assertNull(captured.getReleasedAt());
+    }
+
+    private RoomQuietPeriod quietPeriod(Long id, String reason, LocalDateTime start, LocalDateTime end) {
+        RoomQuietPeriod q = new RoomQuietPeriod();
+        q.setId(id);
+        q.setQuietNo("JY" + id);
+        q.setRoomId(10L);
+        q.setFloorId(1L);
+        q.setReason(reason);
+        q.setStartTime(start);
+        q.setEndTime(end);
+        return q;
     }
 
     @Test

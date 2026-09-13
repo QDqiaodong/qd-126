@@ -11,9 +11,15 @@ import java.util.List;
 public interface RoomActivityService {
 
     /**
-     * 登记接待室活动占用：校验同一接待室时段重叠、设备占用冲突。
+     * 登记接待室活动占用：校验同一接待室时段重叠、静音时段重叠、设备占用冲突。
      */
     RoomActivityVO createActivity(RoomActivityCreateRequest request);
+
+    /**
+     * 修改待开始活动的占用信息（名称、接待室、时段、设备、负责人）。
+     * 时段与静音重叠同样拦截；已开始/已结束的活动只提示，不改历史。
+     */
+    RoomActivityVO updateActivity(Long activityId, RoomActivityCreateRequest request);
 
     /**
      * 按日期、楼层、状态分页筛选活动（状态按当前时间懒推进）。

@@ -154,6 +154,22 @@ CREATE TABLE IF NOT EXISTS `room_activity` (
     INDEX `idx_start_end` (`start_time`, `end_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室活动占用表';
 
+CREATE TABLE IF NOT EXISTS `room_quiet_period` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '静音时段ID',
+    `quiet_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '静音单号',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `start_time` DATETIME NOT NULL COMMENT '静音开始时间',
+    `end_time` DATETIME NOT NULL COMMENT '静音结束时间',
+    `reason` VARCHAR(500) NOT NULL COMMENT '静音原因',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_time` (`room_id`, `start_time`, `end_time`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_start_end` (`start_time`, `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室静音时段表';
+
 CREATE TABLE IF NOT EXISTS `device_replacement` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '替换记录ID',
     `replacement_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '替换单号',

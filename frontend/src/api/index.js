@@ -9,14 +9,19 @@ request.interceptors.response.use(
   response => {
     const res = response.data
     if (res.code !== 200) {
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const err = new Error(res.message || '请求失败')
+      err.code = res.code
+      return Promise.reject(err)
     }
     return res.data
   },
   error => {
     const serverMessage = error.response?.data?.message
     if (serverMessage) {
-      return Promise.reject(new Error(serverMessage))
+      const err = new Error(serverMessage)
+      // 透传后端业务码（如 460 静音时段冲突），页面据此弹出原因
+      err.code = error.response?.data?.code
+      return Promise.reject(err)
     }
     return Promise.reject(error)
   }
@@ -85,10 +90,19 @@ export const inventoryApi = {
 
 export const activityApi = {
   create: data => request.post('/activity', data),
+  update: (id, data) => request.put(`/activity/${id}`, data),
   getPage: params => request.get('/activity', { params }),
   getById: id => request.get(`/activity/${id}`),
   finish: id => request.post(`/activity/${id}/finish`),
   getRoomOccupancies: params => request.get('/activity/room-occupancy', { params })
+}
+
+export const quietPeriodApi = {
+  create: data => request.post('/quiet-period', data),
+  update: (id, data) => request.put(`/quiet-period/${id}`, data),
+  delete: id => request.delete(`/quiet-period/${id}`),
+  getPage: params => request.get('/quiet-period', { params }),
+  getByRoom: roomId => request.get(`/quiet-period/room/${roomId}`)
 }
 
 export const replacementApi = {

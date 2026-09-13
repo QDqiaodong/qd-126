@@ -12,12 +12,15 @@ import com.example.devicemanagement.entity.Floor;
 import com.example.devicemanagement.entity.ReceptionRoom;
 import com.example.devicemanagement.entity.RoomActivity;
 import com.example.devicemanagement.entity.RoomActivityDevice;
+import com.example.devicemanagement.entity.RoomQuietPeriod;
+import com.example.devicemanagement.exception.QuietPeriodConflictException;
 import com.example.devicemanagement.mapper.DeviceMapper;
 import com.example.devicemanagement.mapper.RoomActivityDeviceMapper;
 import com.example.devicemanagement.mapper.RoomActivityMapper;
 import com.example.devicemanagement.service.FloorService;
 import com.example.devicemanagement.service.ReceptionRoomService;
 import com.example.devicemanagement.service.RoomActivityService;
+import com.example.devicemanagement.service.RoomQuietPeriodService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +60,9 @@ public class RoomActivityServiceImpl implements RoomActivityService {
     @Autowired
     private ReceptionRoomService roomService;
 
+    @Autowired
+    private RoomQuietPeriodService quietPeriodService;
+
     @Override
     @Transactional
     public RoomActivityVO createActivity(RoomActivityCreateRequest request) {
@@ -64,108 +70,54 @@ public class RoomActivityServiceImpl implements RoomActivityService {
         // 先把到期/到时的活动状态推进，避免历史状态导致误拦
         refreshExpired(now);
 
-        String name = request.getActivityName() == null ? null : request.getActivityName().trim();
-        if (name == null || name.isEmpty()) {
-            throw new IllegalArgumentException("活动名称不能为空");
-        }
-        if (request.getRoomId() == null) {
-            throw new IllegalArgumentException("请选择接待室");
-        }
-        ReceptionRoom room = roomService.getRoomById(request.getRoomId());
-        if (room == null) {
-            throw new IllegalArgumentException("所选接待室不存在");
-        }
-        if (!Integer.valueOf(1).equals(room.getStatus())) {
-            throw new IllegalArgumentException("所选接待室已停用，无法登记活动");
-        }
-        LocalDateTime start = request.getStartTime();
-        LocalDateTime end = request.getEndTime();
-        if (start == null || end == null) {
-            throw new IllegalArgumentException("请选择活动开始与结束时间");
-        }
-        if (!end.isAfter(start)) {
-            throw new IllegalArgumentException("结束时间必须晚于开始时间");
-        }
-        if (!end.isAfter(now)) {
-            throw new IllegalArgumentException("结束时间已过，不能登记已结束的活动");
-        }
-        String manager = request.getManager() == null ? null : request.getManager().trim();
-        if (manager == null || manager.isEmpty()) {
-            throw new IllegalArgumentException("负责人不能为空");
-        }
-        if (request.getDeviceIds() == null || request.getDeviceIds().isEmpty()) {
-            throw new IllegalArgumentException("请至少选择一台预计使用的影音设备");
-        }
-
-        // 同一接待室时段重叠必须拦住（边界相接不算重叠）
-        List<RoomActivity> roomConflicts = findOverlappingActivities(
-                room.getId(), start, end, null);
-        if (!roomConflicts.isEmpty()) {
-            RoomActivity other = roomConflicts.get(0);
-            throw new IllegalArgumentException("同一接待室时段冲突：活动「" + other.getActivityName()
-                    + "」占用 " + other.getStartTime().format(TIME_FMT) + " ~ "
-                    + other.getEndTime().format(TIME_FMT) + "，与所选时段重叠");
-        }
-
-        // 设备校验：存在、属于该接待室、状态正常、登记内不重复
-        List<Long> deviceIds = request.getDeviceIds().stream().distinct().collect(Collectors.toList());
-        List<Device> devices = deviceMapper.selectBatchIds(deviceIds);
-        Map<Long, Device> deviceMap = devices.stream()
-                .collect(Collectors.toMap(Device::getId, Function.identity(), (a, b) -> a));
-        for (Long deviceId : deviceIds) {
-            Device device = deviceMap.get(deviceId);
-            if (device == null) {
-                throw new IllegalArgumentException("所选设备不存在或已删除");
-            }
-            if (!room.getId().equals(device.getCurrentRoomId())) {
-                throw new IllegalArgumentException("设备「" + device.getDeviceName()
-                        + "」当前不在该接待室，不能登记使用");
-            }
-            if (!Integer.valueOf(1).equals(device.getStatus())) {
-                throw new IllegalArgumentException("设备「" + device.getDeviceName()
-                        + "」当前状态为" + deviceStatusText(device.getStatus()) + "，不能投入活动使用");
-            }
-        }
-
-        // 活动进行中的设备不得再被调配到其他房间：设备时段重叠同样拦截
-        Map<Long, RoomActivity> deviceConflict = findDeviceConflicts(deviceIds, start, end, null);
-        if (!deviceConflict.isEmpty()) {
-            Map<Long, String> roomNameMap = loadRoomMap();
-            Long firstDeviceId = deviceConflict.keySet().iterator().next();
-            RoomActivity other = deviceConflict.get(firstDeviceId);
-            Device device = deviceMap.get(firstDeviceId);
-            throw new IllegalArgumentException("设备「" + (device != null ? device.getDeviceName() : firstDeviceId)
-                    + "」在该时段已被活动「" + other.getActivityName() + "」占用（接待室 "
-                    + roomNameMap.getOrDefault(other.getRoomId(), String.valueOf(other.getRoomId())) + "）");
-        }
+        ValidatedOccupation valid = validateOccupation(request, null, now);
 
         RoomActivity activity = new RoomActivity();
         activity.setActivityNo(generateActivityNo());
-        activity.setActivityName(name);
-        activity.setRoomId(room.getId());
-        activity.setFloorId(room.getFloorId());
-        activity.setStartTime(start);
-        activity.setEndTime(end);
-        activity.setManager(manager);
+        activity.setActivityName(valid.name);
+        activity.setRoomId(valid.room.getId());
+        activity.setFloorId(valid.room.getFloorId());
+        activity.setStartTime(valid.start);
+        activity.setEndTime(valid.end);
+        activity.setManager(valid.manager);
         // 登记当前时刻已在时段内的活动直接为进行中
-        int initStatus = now.isBefore(start)
+        int initStatus = now.isBefore(valid.start)
                 ? RoomActivity.STATUS_PENDING : RoomActivity.STATUS_ONGOING;
         activity.setStatus(initStatus);
         activity.setRemark(request.getRemark());
         activityMapper.insert(activity);
 
-        for (Long deviceId : deviceIds) {
-            Device device = deviceMap.get(deviceId);
-            RoomActivityDevice row = new RoomActivityDevice();
-            row.setActivityId(activity.getId());
-            row.setDeviceId(device.getId());
-            row.setDeviceCode(device.getDeviceCode());
-            row.setDeviceName(device.getDeviceName());
-            row.setDeviceType(device.getDeviceType());
-            activityDeviceMapper.insert(row);
+        replaceDeviceRows(activity.getId(), valid);
+
+        return toVO(activity, loadFloorMap(), loadRoomMap(), valid.deviceIds.size(), null, null);
+    }
+
+    @Override
+    @Transactional
+    public RoomActivityVO updateActivity(Long activityId, RoomActivityCreateRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        refreshExpired(now);
+
+        RoomActivity activity = requireActivity(activityId);
+        // 已开始/已结束的活动只提示，不改历史占用
+        if (!Integer.valueOf(RoomActivity.STATUS_PENDING).equals(activity.getStatus())) {
+            throw new IllegalArgumentException("活动已开始或已结束，历史占用不可修改，仅可查看冲突提示");
         }
 
-        return toVO(activity, loadFloorMap(), loadRoomMap(), deviceIds.size(), null, null);
+        ValidatedOccupation valid = validateOccupation(request, activityId, now);
+
+        activity.setActivityName(valid.name);
+        activity.setRoomId(valid.room.getId());
+        activity.setFloorId(valid.room.getFloorId());
+        activity.setStartTime(valid.start);
+        activity.setEndTime(valid.end);
+        activity.setManager(valid.manager);
+        activity.setRemark(request.getRemark());
+        activityMapper.updateById(activity);
+
+        replaceDeviceRows(activity.getId(), valid);
+
+        return toVO(activity, loadFloorMap(), loadRoomMap(), valid.deviceIds.size(), null, null);
     }
 
     @Override
@@ -276,6 +228,17 @@ public class RoomActivityServiceImpl implements RoomActivityService {
             }
         }
 
+        // 静音时段重叠提示：已开始的活动只提示，不改历史
+        if (!ended) {
+            List<RoomQuietPeriod> quietOverlaps = quietPeriodService.findOverlapping(
+                    activity.getRoomId(), activity.getStartTime(), activity.getEndTime());
+            for (RoomQuietPeriod quiet : quietOverlaps) {
+                conflicts.add("与静音时段重叠（" + quiet.getStartTime().format(TIME_FMT) + " ~ "
+                        + quiet.getEndTime().format(TIME_FMT) + "），静音原因：" + quiet.getReason()
+                        + "；仅提示，不改已登记活动");
+            }
+        }
+
         return toVO(activity, floorMap, roomMap, rows.size(), deviceVOs, conflicts);
     }
 
@@ -360,6 +323,154 @@ public class RoomActivityServiceImpl implements RoomActivityService {
     }
 
     // ---------------- 私有辅助方法 ----------------
+
+    /**
+     * 登记/修改活动共用的占用校验：基础字段、接待室时段重叠、静音时段重叠、设备占用冲突。
+     * excludeActivityId 用于修改时排除自身。
+     */
+    private ValidatedOccupation validateOccupation(RoomActivityCreateRequest request,
+                                                   Long excludeActivityId, LocalDateTime now) {
+        String name = request.getActivityName() == null ? null : request.getActivityName().trim();
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("活动名称不能为空");
+        }
+        if (request.getRoomId() == null) {
+            throw new IllegalArgumentException("请选择接待室");
+        }
+        ReceptionRoom room = roomService.getRoomById(request.getRoomId());
+        if (room == null) {
+            throw new IllegalArgumentException("所选接待室不存在");
+        }
+        if (!Integer.valueOf(1).equals(room.getStatus())) {
+            throw new IllegalArgumentException("所选接待室已停用，无法登记活动");
+        }
+        LocalDateTime start = request.getStartTime();
+        LocalDateTime end = request.getEndTime();
+        if (start == null || end == null) {
+            throw new IllegalArgumentException("请选择活动开始与结束时间");
+        }
+        if (!end.isAfter(start)) {
+            throw new IllegalArgumentException("结束时间必须晚于开始时间");
+        }
+        if (!end.isAfter(now)) {
+            throw new IllegalArgumentException("结束时间已过，不能登记已结束的活动");
+        }
+        String manager = request.getManager() == null ? null : request.getManager().trim();
+        if (manager == null || manager.isEmpty()) {
+            throw new IllegalArgumentException("负责人不能为空");
+        }
+        if (request.getDeviceIds() == null || request.getDeviceIds().isEmpty()) {
+            throw new IllegalArgumentException("请至少选择一台预计使用的影音设备");
+        }
+
+        // 同一接待室时段重叠必须拦住（边界相接不算重叠）
+        List<RoomActivity> roomConflicts = findOverlappingActivities(
+                room.getId(), start, end, excludeActivityId);
+        if (!roomConflicts.isEmpty()) {
+            RoomActivity other = roomConflicts.get(0);
+            throw new IllegalArgumentException("同一接待室时段冲突：活动「" + other.getActivityName()
+                    + "」占用 " + other.getStartTime().format(TIME_FMT) + " ~ "
+                    + other.getEndTime().format(TIME_FMT) + "，与所选时段重叠");
+        }
+
+        // 静音时段重叠必须拦住并带出原因；未设静音的接待室直接放行
+        assertQuietPeriodClear(room, start, end);
+
+        // 设备校验：存在、属于该接待室、状态正常、登记内不重复
+        List<Long> deviceIds = request.getDeviceIds().stream().distinct().collect(Collectors.toList());
+        List<Device> devices = deviceMapper.selectBatchIds(deviceIds);
+        Map<Long, Device> deviceMap = devices.stream()
+                .collect(Collectors.toMap(Device::getId, Function.identity(), (a, b) -> a));
+        for (Long deviceId : deviceIds) {
+            Device device = deviceMap.get(deviceId);
+            if (device == null) {
+                throw new IllegalArgumentException("所选设备不存在或已删除");
+            }
+            if (!room.getId().equals(device.getCurrentRoomId())) {
+                throw new IllegalArgumentException("设备「" + device.getDeviceName()
+                        + "」当前不在该接待室，不能登记使用");
+            }
+            if (!Integer.valueOf(1).equals(device.getStatus())) {
+                throw new IllegalArgumentException("设备「" + device.getDeviceName()
+                        + "」当前状态为" + deviceStatusText(device.getStatus()) + "，不能投入活动使用");
+            }
+        }
+
+        // 活动进行中的设备不得再被调配到其他房间：设备时段重叠同样拦截
+        Map<Long, RoomActivity> deviceConflict = findDeviceConflicts(deviceIds, start, end, excludeActivityId);
+        if (!deviceConflict.isEmpty()) {
+            Map<Long, String> roomNameMap = loadRoomMap();
+            Long firstDeviceId = deviceConflict.keySet().iterator().next();
+            RoomActivity other = deviceConflict.get(firstDeviceId);
+            Device device = deviceMap.get(firstDeviceId);
+            throw new IllegalArgumentException("设备「" + (device != null ? device.getDeviceName() : firstDeviceId)
+                    + "」在该时段已被活动「" + other.getActivityName() + "」占用（接待室 "
+                    + roomNameMap.getOrDefault(other.getRoomId(), String.valueOf(other.getRoomId())) + "）");
+        }
+
+        ValidatedOccupation valid = new ValidatedOccupation();
+        valid.name = name;
+        valid.room = room;
+        valid.start = start;
+        valid.end = end;
+        valid.manager = manager;
+        valid.deviceIds = deviceIds;
+        valid.deviceMap = deviceMap;
+        return valid;
+    }
+
+    /**
+     * 活动时段与接待室静音时段重叠时拦截，错误信息携带静音起止与原因。
+     */
+    private void assertQuietPeriodClear(ReceptionRoom room, LocalDateTime start, LocalDateTime end) {
+        List<RoomQuietPeriod> overlaps = quietPeriodService.findOverlapping(room.getId(), start, end);
+        if (overlaps.isEmpty()) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder("活动时段与接待室「").append(room.getRoomName())
+                .append("」的静音时段重叠，无法登记：");
+        for (int i = 0; i < overlaps.size(); i++) {
+            RoomQuietPeriod quiet = overlaps.get(i);
+            if (i > 0) {
+                sb.append("；");
+            }
+            sb.append(quiet.getStartTime().format(TIME_FMT)).append(" ~ ")
+                    .append(quiet.getEndTime().format(TIME_FMT))
+                    .append("（静音原因：").append(quiet.getReason()).append("）");
+        }
+        sb.append("，请调整活动时间或联系行政调整静音时段");
+        throw new QuietPeriodConflictException(sb.toString());
+    }
+
+    /**
+     * 全量替换活动的占用设备明细（登记时插入，修改时先清后插）。
+     */
+    private void replaceDeviceRows(Long activityId, ValidatedOccupation valid) {
+        LambdaQueryWrapper<RoomActivityDevice> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(RoomActivityDevice::getActivityId, activityId);
+        activityDeviceMapper.delete(wrapper);
+        for (Long deviceId : valid.deviceIds) {
+            Device device = valid.deviceMap.get(deviceId);
+            RoomActivityDevice row = new RoomActivityDevice();
+            row.setActivityId(activityId);
+            row.setDeviceId(device.getId());
+            row.setDeviceCode(device.getDeviceCode());
+            row.setDeviceName(device.getDeviceName());
+            row.setDeviceType(device.getDeviceType());
+            activityDeviceMapper.insert(row);
+        }
+    }
+
+    /** 校验通过的占用数据（登记/修改共用） */
+    private static class ValidatedOccupation {
+        private String name;
+        private ReceptionRoom room;
+        private LocalDateTime start;
+        private LocalDateTime end;
+        private String manager;
+        private List<Long> deviceIds;
+        private Map<Long, Device> deviceMap;
+    }
 
     private RoomActivity requireActivity(Long activityId) {
         RoomActivity activity = activityMapper.selectById(activityId);

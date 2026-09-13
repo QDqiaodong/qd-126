@@ -35,6 +35,10 @@
             <el-icon><Calendar /></el-icon>
             <span>接待室活动</span>
           </el-menu-item>
+          <el-menu-item index="/quiet-period">
+            <el-icon><MuteNotification /></el-icon>
+            <span>静音时段</span>
+          </el-menu-item>
           <el-menu-item index="/welcome-board">
             <el-icon><CollectionTag /></el-icon>
             <span>欢迎牌排期</span>
@@ -86,7 +90,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar, AlarmClock, Switch, Box, List, CollectionTag } from '@element-plus/icons-vue'
+import { Monitor, PieChart, Grid, OfficeBuilding, HomeFilled, RefreshLeft, Menu, Tickets, Finished, Calendar, AlarmClock, Switch, Box, List, CollectionTag, MuteNotification } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -105,6 +109,7 @@ const titleMap = {
   '/floor': '楼层管理',
   '/room': '接待室管理',
   '/activity': '接待室活动占用',
+  '/quiet-period': '接待室静音时段',
   '/welcome-board': '接待室欢迎牌排期',
   '/replacement': '故障应急替换',
   '/combo': '常用影音组合套用',

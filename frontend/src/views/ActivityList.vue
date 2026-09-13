@@ -56,9 +56,10 @@
             <el-tag :type="statusTagType(row.status)">{{ row.statusText }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
             <el-button @click="goDetail(row.id)" size="small" type="primary">详情</el-button>
+            <el-button v-if="row.status === 0" @click="openEdit(row)" size="small">编辑</el-button>
             <el-button v-if="row.status !== 2" @click="handleFinish(row)" size="small" type="warning">
               结束释放
             </el-button>
@@ -79,7 +80,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="createVisible" title="登记接待室活动占用" width="640px">
+    <el-dialog v-model="createVisible" :title="isEdit ? '修改活动占用' : '登记接待室活动占用'" width="640px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="所属楼层" required>
           <el-select v-model="createForm.floorId" placeholder="请选择楼层" class="full-width"
@@ -92,6 +93,15 @@
             @change="onCreateRoomChange">
             <el-option v-for="room in createRooms" :key="room.id" :label="room.roomName" :value="room.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="roomQuietPeriods.length" label="静音时段">
+          <div class="quiet-hints">
+            <div v-for="quiet in roomQuietPeriods" :key="quiet.id" class="quiet-hint">
+              <el-icon><MuteNotification /></el-icon>
+              <span>{{ formatRange(quiet.startTime, quiet.endTime) }}（{{ quiet.reason }}）</span>
+            </div>
+            <div class="quiet-tip">所选活动时段与静音重叠将被拦截，请避开以上时段</div>
+          </div>
         </el-form-item>
         <el-form-item label="活动名称" required>
           <el-input v-model="createForm.activityName" placeholder="请输入活动名称" />
@@ -137,7 +147,9 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button @click="confirmCreate" type="primary" :loading="creating">登记</el-button>
+        <el-button @click="confirmCreate" type="primary" :loading="creating">
+          {{ isEdit ? '保存' : '登记' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -146,9 +158,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Plus } from '@element-plus/icons-vue'
+import { Search, Plus, MuteNotification } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { activityApi, floorApi, roomApi, deviceApi } from '../api'
+import { activityApi, floorApi, roomApi, deviceApi, quietPeriodApi } from '../api'
 
 const router = useRouter()
 
@@ -164,8 +176,11 @@ const floors = ref([])
 
 const createVisible = ref(false)
 const creating = ref(false)
+const isEdit = ref(false)
+const editId = ref(null)
 const createRooms = ref([])
 const roomDevices = ref([])
+const roomQuietPeriods = ref([])
 const createForm = ref(defaultForm())
 
 function defaultForm() {
@@ -235,23 +250,51 @@ const handleCurrentChange = (page) => {
 const goDetail = (id) => router.push(`/activity/${id}`)
 
 const openCreate = () => {
+  isEdit.value = false
+  editId.value = null
   createForm.value = defaultForm()
   createRooms.value = []
   roomDevices.value = []
+  roomQuietPeriods.value = []
   createVisible.value = true
+}
+
+const openEdit = async (row) => {
+  isEdit.value = true
+  editId.value = row.id
+  createForm.value = defaultForm()
+  createVisible.value = true
+  try {
+    const detail = await activityApi.getById(row.id)
+    createRooms.value = await roomApi.getByFloor(detail.floorId)
+    createForm.value = {
+      floorId: detail.floorId,
+      roomId: detail.roomId,
+      activityName: detail.activityName,
+      timeRange: [detail.startTime, detail.endTime],
+      deviceIds: (detail.devices || []).map(d => d.deviceId),
+      manager: detail.manager,
+      remark: detail.remark || ''
+    }
+    await loadRoomDevices(detail.roomId)
+  } catch (error) {
+    createVisible.value = false
+    ElMessage.error(error.message || '加载活动信息失败')
+  }
 }
 
 const onCreateFloorChange = async (floorId) => {
   createForm.value.roomId = null
   createForm.value.deviceIds = []
   roomDevices.value = []
+  roomQuietPeriods.value = []
   createRooms.value = floorId ? await roomApi.getByFloor(floorId) : []
 }
 
-const onCreateRoomChange = async (roomId) => {
-  createForm.value.deviceIds = []
+const loadRoomDevices = async (roomId) => {
   if (!roomId) {
     roomDevices.value = []
+    roomQuietPeriods.value = []
     return
   }
   try {
@@ -261,6 +304,32 @@ const onCreateRoomChange = async (roomId) => {
   } catch (error) {
     roomDevices.value = []
   }
+  // 该接待室已登记的静音时段：表单内提示，提交时重叠会被拦截
+  try {
+    roomQuietPeriods.value = await quietPeriodApi.getByRoom(roomId)
+  } catch (error) {
+    roomQuietPeriods.value = []
+  }
+}
+
+const onCreateRoomChange = async (roomId) => {
+  createForm.value.deviceIds = []
+  await loadRoomDevices(roomId)
+}
+
+// 静音时段冲突业务码：与后端 GlobalExceptionHandler 约定
+const QUIET_CONFLICT_CODE = 460
+
+const showSubmitError = (error, fallback) => {
+  if (error && error.code === QUIET_CONFLICT_CODE) {
+    // 静音重叠：弹出原因并拦住提交
+    ElMessageBox.alert(error.message, '静音时段冲突', {
+      type: 'warning',
+      confirmButtonText: '知道了'
+    }).catch(() => {})
+    return
+  }
+  ElMessage.error((error && error.message) || fallback)
 }
 
 const confirmCreate = async () => {
@@ -274,7 +343,7 @@ const confirmCreate = async () => {
 
   creating.value = true
   try {
-    const created = await activityApi.create({
+    const payload = {
       activityName: form.activityName.trim(),
       roomId: form.roomId,
       startTime: form.timeRange[0],
@@ -282,12 +351,20 @@ const confirmCreate = async () => {
       deviceIds: form.deviceIds,
       manager: form.manager.trim(),
       remark: form.remark
-    })
-    ElMessage.success('活动登记成功')
-    createVisible.value = false
-    router.push(`/activity/${created.id}`)
+    }
+    if (isEdit.value) {
+      await activityApi.update(editId.value, payload)
+      ElMessage.success('活动占用已更新')
+      createVisible.value = false
+      loadActivities()
+    } else {
+      const created = await activityApi.create(payload)
+      ElMessage.success('活动登记成功')
+      createVisible.value = false
+      router.push(`/activity/${created.id}`)
+    }
   } catch (error) {
-    ElMessage.error(error.message || '活动登记失败')
+    showSubmitError(error, isEdit.value ? '活动占用更新失败' : '活动登记失败')
   } finally {
     creating.value = false
   }
@@ -375,6 +452,29 @@ onMounted(async () => {
 .form-hint {
   font-size: 12px;
   color: #e6a23c;
+  margin-top: 4px;
+}
+
+.quiet-hints {
+  width: 100%;
+  background: #fdf6ec;
+  border: 1px solid #f5dab1;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.quiet-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b88230;
+  line-height: 1.8;
+}
+
+.quiet-tip {
+  font-size: 12px;
+  color: #c0c4cc;
   margin-top: 4px;
 }
 

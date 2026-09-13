@@ -27,6 +27,12 @@ public class RoomActivityController {
         return ApiResponse.success("活动登记成功", activityService.createActivity(request));
     }
 
+    @PutMapping("/{id}")
+    public ApiResponse<RoomActivityVO> updateActivity(@PathVariable Long id,
+                                                      @RequestBody RoomActivityCreateRequest request) {
+        return ApiResponse.success("活动占用已更新", activityService.updateActivity(id, request));
+    }
+
     @GetMapping
     public ApiResponse<PageResponse<RoomActivityVO>> getActivities(
             @RequestParam(defaultValue = "1") int pageNum,
