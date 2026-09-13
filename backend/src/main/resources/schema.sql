@@ -401,6 +401,25 @@ CREATE TABLE IF NOT EXISTS `rain_gear_borrow` (
     INDEX `idx_expected_return` (`status`, `expected_return_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室雨具（雨伞/雨衣）借用台账表';
 
+CREATE TABLE IF NOT EXISTS `plant_care` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '绿植养护ID',
+    `care_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '养护单号',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `plant_name` VARCHAR(100) NOT NULL COMMENT '绿植名称',
+    `caretaker` VARCHAR(50) NOT NULL COMMENT '养护人',
+    `next_water_time` DATETIME NOT NULL COMMENT '下次浇水时间（到期未浇标逾期）',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0待养护 1已浇水（核销后待养件数减一；逾期按下次浇水时间与当前时间派生，不落库）',
+    `watered_at` DATETIME DEFAULT NULL COMMENT '实际浇水（核销）时间',
+    `watered_by` VARCHAR(50) DEFAULT NULL COMMENT '浇水核销登记人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_floor_room` (`floor_id`, `room_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_next_water` (`status`, `next_water_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室绿植养护台账表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),
