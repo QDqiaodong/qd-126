@@ -29,7 +29,11 @@ public class FloorServiceImpl implements FloorService {
         floor.setFloorNumber(request.getFloorNumber());
         floor.setBuildingName(request.getBuildingName());
         floorMapper.insert(floor);
-        redisCacheService.invalidateFloorCache();
+        try {
+            redisCacheService.invalidateFloorCache();
+        } catch (Exception e) {
+            // 缓存失效失败不应影响楼层数据入库，列表查询会在缓存不可用时回退到数据库。
+        }
         return floor;
     }
 
