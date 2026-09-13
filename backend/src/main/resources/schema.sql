@@ -339,6 +339,26 @@ CREATE TABLE IF NOT EXISTS `emergency_light_inspection` (
     INDEX `idx_check_result` (`check_result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应急灯检查单（到期补检）';
 
+CREATE TABLE IF NOT EXISTS `interpreter_booking` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '翻译预约ID',
+    `booking_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '预约单号',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `language` VARCHAR(50) NOT NULL COMMENT '翻译语种 英语/日语/法语/德语/韩语/俄语/西班牙语/其他',
+    `interpreter_name` VARCHAR(50) NOT NULL COMMENT '随行译员姓名',
+    `start_time` DATETIME NOT NULL COMMENT '预约开始时间',
+    `end_time` DATETIME NOT NULL COMMENT '预约结束时间',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0待开始 1进行中 2已结束（按当前时间懒推进）',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_room_time` (`room_id`, `start_time`, `end_time`),
+    INDEX `idx_floor_id` (`floor_id`),
+    INDEX `idx_interpreter` (`interpreter_name`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_start_end` (`start_time`, `end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室随行翻译预约表';
+
 CREATE TABLE IF NOT EXISTS `welcome_board` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '欢迎牌排期ID',
     `board_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '欢迎牌单号',

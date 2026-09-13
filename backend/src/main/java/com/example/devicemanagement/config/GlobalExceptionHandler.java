@@ -1,6 +1,7 @@
 package com.example.devicemanagement.config;
 
 import com.example.devicemanagement.dto.response.ApiResponse;
+import com.example.devicemanagement.exception.InterpreterConflictException;
 import com.example.devicemanagement.exception.QuietPeriodConflictException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +17,9 @@ public class GlobalExceptionHandler {
     /** 静音时段冲突业务码：前端据此弹出静音原因并拦住提交 */
     public static final int CODE_QUIET_PERIOD_CONFLICT = 460;
 
+    /** 译员时段撞车业务码：前端据此弹出已约接待室并拦住提交 */
+    public static final int CODE_INTERPRETER_CONFLICT = 461;
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException e) {
@@ -26,6 +30,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleQuietPeriodConflict(QuietPeriodConflictException e) {
         return ApiResponse.error(CODE_QUIET_PERIOD_CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(InterpreterConflictException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInterpreterConflict(InterpreterConflictException e) {
+        return ApiResponse.error(CODE_INTERPRETER_CONFLICT, e.getMessage());
     }
 
     @ExceptionHandler(RuntimeException.class)

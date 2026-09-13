@@ -105,6 +105,15 @@ export const quietPeriodApi = {
   getByRoom: roomId => request.get(`/quiet-period/room/${roomId}`)
 }
 
+export const interpreterBookingApi = {
+  create: data => request.post('/interpreter-booking', data),
+  update: (id, data) => request.put(`/interpreter-booking/${id}`, data),
+  delete: id => request.delete(`/interpreter-booking/${id}`),
+  getPage: params => request.get('/interpreter-booking', { params }),
+  getById: id => request.get(`/interpreter-booking/${id}`),
+  getByRoom: roomId => request.get(`/interpreter-booking/room/${roomId}`)
+}
+
 export const replacementApi = {
   create: data => request.post('/replacement', data),
   getSpares: faultyDeviceId => request.get('/replacement/spares', { params: { faultyDeviceId } }),
