@@ -78,6 +78,7 @@ describe('SpecTemplateList 规格模板管理', () => {
       deviceType: '类型1',
       totalDeviceCount: 5,
       affectedDeviceCount: 3,
+      referencingDeviceNames: ['一楼电视A', '二楼电视B', '三楼电视C'],
       addedFields: [{ fieldKey: 'brightness', fieldLabel: '亮度', fieldType: 'number', required: true, options: [], sortOrder: 3 }],
       removedFields: [{ fieldKey: 'resolution', fieldLabel: '分辨率', fieldType: 'select' }],
       typeChangedFields: [{ fieldKey: 'screenSize', fieldLabel: '屏幕尺寸', oldFieldType: 'number', newFieldType: 'text' }],
@@ -107,6 +108,11 @@ describe('SpecTemplateList 规格模板管理', () => {
     expect(document.body.textContent).toContain('分辨率')
     expect(document.body.textContent).toContain('屏幕尺寸')
     expect(document.body.textContent).toContain('不会覆盖历史设备已保存的规格')
+    // 正在引用该模板的设备名称逐台展示
+    expect(document.body.textContent).toContain('正在引用该模板的设备')
+    expect(document.body.textContent).toContain('一楼电视A')
+    expect(document.body.textContent).toContain('二楼电视B')
+    expect(document.body.textContent).toContain('三楼电视C')
 
     // 确认保存才真正更新
     findButtonByText(document.body, '确认保存').click()
@@ -116,6 +122,43 @@ describe('SpecTemplateList 规格模板管理', () => {
     expect(specTemplateApi.update.mock.calls[0][0]).toBe(1)
     // 保存成功后刷新列表
     expect(specTemplateApi.getAll).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('预览弹窗取消则不写入，模板保持原规格', async () => {
+    specTemplateApi.getAll.mockResolvedValue([makeTemplate(1)])
+    specTemplateApi.preview.mockResolvedValue({
+      templateId: 1,
+      deviceType: '类型1',
+      totalDeviceCount: 2,
+      affectedDeviceCount: 1,
+      referencingDeviceNames: ['设备甲', '设备乙'],
+      addedFields: [],
+      removedFields: [{ fieldKey: 'key11', fieldLabel: '字段11', fieldType: 'text' }],
+      typeChangedFields: [],
+      changed: true
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await openEditDialog(wrapper)
+
+    findButtonByText(document.body, '预览变更并保存').click()
+    await flushPromises()
+
+    const previewDialog = Array.from(document.body.querySelectorAll('.el-dialog'))
+      .find(d => d.textContent.includes('变更预览与影响确认'))
+    expect(previewDialog.textContent).toContain('设备甲')
+    expect(previewDialog.textContent).toContain('设备乙')
+
+    // 取消：不调用更新接口，不刷新列表，原规格保持不变
+    const cancelButton = Array.from(previewDialog.querySelectorAll('button'))
+      .find(btn => btn.textContent.includes('取消'))
+    cancelButton.click()
+    await flushPromises()
+
+    expect(specTemplateApi.update).not.toHaveBeenCalled()
+    expect(specTemplateApi.getAll).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 

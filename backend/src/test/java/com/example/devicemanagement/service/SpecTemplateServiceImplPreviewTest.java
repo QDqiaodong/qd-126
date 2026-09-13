@@ -89,6 +89,7 @@ class SpecTemplateServiceImplPreviewTest {
     private Device buildDevice(Long id, String specJson) {
         Device device = new Device();
         device.setId(id);
+        device.setDeviceName("设备" + id);
         device.setDeviceType("电视");
         device.setSpecJson(specJson);
         return device;
@@ -125,6 +126,8 @@ class SpecTemplateServiceImplPreviewTest {
         assertEquals(4, preview.getTotalDeviceCount());
         // 仅类型变化(resolution)与删除(panelType)的已存值计入受影响；screenSize 未变、空规格不计
         assertEquals(2, preview.getAffectedDeviceCount());
+        // 正在引用该模板的设备名称逐台返回，供保存前弹窗展示
+        assertEquals(List.of("设备1", "设备2", "设备3", "设备4"), preview.getReferencingDeviceNames());
         assertTrue(preview.getChanged());
 
         assertEquals(List.of("brightness"),
@@ -139,6 +142,25 @@ class SpecTemplateServiceImplPreviewTest {
         verify(fieldMapper, never()).delete(any());
         verify(fieldMapper, never()).insert(any());
         verify(templateMapper, never()).updateById(any());
+    }
+
+    @Test
+    void previewWithoutReferencingDevicesReturnsEmptyNames() {
+        when(templateMapper.selectById(1L)).thenReturn(buildTemplate());
+        when(fieldMapper.selectList(any())).thenReturn(List.of(
+                oldField(1L, "screenSize", "屏幕尺寸", "number")));
+        when(deviceMapper.selectList(any())).thenReturn(List.of());
+
+        SpecTemplateRequest request = new SpecTemplateRequest();
+        request.setDeviceType("电视");
+        request.setStatus(1);
+        request.setFields(List.of(newFieldRequest("screenSize", "屏幕尺寸", "text")));
+
+        SpecTemplatePreviewVO preview = specTemplateService.previewChanges(1L, request);
+
+        assertEquals(0, preview.getTotalDeviceCount());
+        assertEquals(0, preview.getAffectedDeviceCount());
+        assertTrue(preview.getReferencingDeviceNames().isEmpty());
     }
 
     @Test

@@ -150,6 +150,10 @@ public class SpecTemplateServiceImpl implements SpecTemplateService {
         vo.setDeviceType(template.getDeviceType());
         vo.setTotalDeviceCount(devices.size());
         vo.setAffectedDeviceCount(affectedCount);
+        // 正在引用该模板的设备名称，保存前弹窗逐台展示，管理员确认后才写入
+        vo.setReferencingDeviceNames(devices.stream()
+                .map(Device::getDeviceName)
+                .collect(Collectors.toList()));
         vo.setAddedFields(added);
         vo.setRemovedFields(removed);
         vo.setTypeChangedFields(typeChanged);

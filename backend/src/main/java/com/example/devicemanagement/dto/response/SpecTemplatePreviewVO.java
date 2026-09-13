@@ -24,6 +24,11 @@ public class SpecTemplatePreviewVO {
      */
     private Integer affectedDeviceCount;
 
+    /**
+     * 正在引用该模板的设备名称（该设备类型下的全部设备），保存前弹窗逐台展示
+     */
+    private List<String> referencingDeviceNames;
+
     private List<SpecFieldChangeVO> addedFields;
     private List<SpecFieldChangeVO> removedFields;
     private List<SpecFieldChangeVO> typeChangedFields;

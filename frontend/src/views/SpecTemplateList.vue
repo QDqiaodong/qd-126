@@ -13,7 +13,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="编辑模板保存前需确认字段变更与受影响设备数量；停用或修改模板不会覆盖历史设备已保存的规格，重新启用后新设备按最新字段校验。"
+        title="编辑模板保存前需确认字段变更、受影响设备数量与正在引用的设备名单，确认后才写入；停用或修改模板不会覆盖历史设备已保存的规格，重新启用后新设备按最新字段校验。"
         class="tip"
       />
 
@@ -267,6 +267,21 @@
           />
 
           <div class="change-section">
+            <h4 class="change-title device-title">正在引用该模板的设备（{{ referencingNames.length }} 台）— 确认后才写入，取消保持原规格</h4>
+            <el-text v-if="referencingNames.length === 0" type="info" size="small">暂无设备引用该模板</el-text>
+            <div v-else class="device-names">
+              <el-tag
+                v-for="name in referencingNames"
+                :key="name"
+                type="info"
+                class="change-tag"
+              >
+                {{ name }}
+              </el-tag>
+            </div>
+          </div>
+
+          <div class="change-section">
             <h4 class="change-title add-title">新增字段（{{ previewData.addedFields.length }}）</h4>
             <el-text v-if="previewData.addedFields.length === 0" type="info" size="small">无</el-text>
             <el-tag
@@ -378,6 +393,9 @@ const typeOptions = computed(() => {
 })
 
 const statusChanged = computed(() => isEdit.value && originalStatus.value !== null && originalStatus.value !== form.status)
+
+// 正在引用该模板的设备名称，保存前弹窗逐台展示
+const referencingNames = computed(() => previewData.value?.referencingDeviceNames || [])
 
 const formatTime = (time) => {
   if (!time) return '-'
@@ -705,6 +723,15 @@ onMounted(() => {
 
 .change-tag {
   margin: 2px 6px 2px 0;
+}
+
+.device-title {
+  color: #606266;
+}
+
+.device-names {
+  max-height: 160px;
+  overflow-y: auto;
 }
 
 .type-change-row {

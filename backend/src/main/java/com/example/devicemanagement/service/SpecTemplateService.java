@@ -15,7 +15,7 @@ public interface SpecTemplateService {
     SpecTemplateVO updateTemplate(Long id, SpecTemplateRequest request);
 
     /**
-     * 编辑保存前的变更预览：字段新增/删除/类型变化及受影响设备数量。
+     * 编辑保存前的变更预览：字段新增/删除/类型变化、受影响设备数量及正在引用该模板的设备名称。
      * 只做差异计算，不落库；同时对请求做完整校验，非法字段定义直接拦截。
      */
     SpecTemplatePreviewVO previewChanges(Long id, SpecTemplateRequest request);
