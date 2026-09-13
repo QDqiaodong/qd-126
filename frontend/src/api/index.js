@@ -131,6 +131,14 @@ export const welcomeBoardApi = {
   getRoomAvailability: params => request.get('/welcome-board/room-availability', { params })
 }
 
+export const rainGearApi = {
+  create: data => request.post('/rain-gear/borrow', data),
+  returnBorrow: (id, data) => request.post(`/rain-gear/${id}/return`, data || {}),
+  getPage: params => request.get('/rain-gear', { params }),
+  getById: id => request.get(`/rain-gear/${id}`),
+  getStats: params => request.get('/rain-gear/stats', { params })
+}
+
 export const comboApi = {
   getAll: status => request.get('/combo', { params: status !== undefined ? { status } : {} }),
   getById: id => request.get(`/combo/${id}`),

@@ -382,6 +382,25 @@ CREATE TABLE IF NOT EXISTS `welcome_board` (
     INDEX `idx_planned_remove` (`status`, `planned_remove_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室欢迎牌排期表';
 
+CREATE TABLE IF NOT EXISTS `rain_gear_borrow` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '雨具借用单ID',
+    `borrow_no` VARCHAR(40) NOT NULL UNIQUE COMMENT '借用单号',
+    `room_id` BIGINT NOT NULL COMMENT '接待室ID',
+    `floor_id` BIGINT NOT NULL COMMENT '所属楼层ID（冗余，便于按楼层筛选）',
+    `gear_type` VARCHAR(10) NOT NULL COMMENT '雨具类型 UMBRELLA雨伞 RAINCOAT雨衣',
+    `borrower` VARCHAR(50) NOT NULL COMMENT '借出人',
+    `expected_return_time` DATETIME NOT NULL COMMENT '预计归还时间',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0在借 1已归还（逾期由预计归还时间按当前时间派生，不落库）',
+    `returned_at` DATETIME DEFAULT NULL COMMENT '实际归还（核销）时间',
+    `returned_by` VARCHAR(50) DEFAULT NULL COMMENT '归还核销登记人',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_floor_room` (`floor_id`, `room_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_expected_return` (`status`, `expected_return_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接待室雨具（雨伞/雨衣）借用台账表';
+
 -- 预置四类设备规格模板（模板停用不会清除历史设备规格数据）
 INSERT IGNORE INTO `device_spec_template` (`id`, `device_type`, `status`) VALUES
     (1, '电视', 1),
