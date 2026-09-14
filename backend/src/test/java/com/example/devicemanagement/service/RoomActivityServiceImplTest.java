@@ -123,7 +123,10 @@ class RoomActivityServiceImplTest {
 
         // selectList 按 SQL 片段区分：未结束活动刷新 / 同接待室冲突 / 进行中占用查询
         when(activityMapper.selectList(any())).thenAnswer(inv -> {
-            String sql = inv.getArgument(0, com.baomidou.mybatisplus.core.conditions.Wrapper.class).getSqlSegment();
+            // 用例内重复打桩时会以 null 包装器触发本答案，按空条件处理
+            com.baomidou.mybatisplus.core.conditions.Wrapper<?> queryWrapper =
+                    inv.getArgument(0, com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+            String sql = queryWrapper == null ? "" : queryWrapper.getSqlSegment();
             if (sql.contains("start_time")) {
                 // 同接待室时段重叠查询：内存判定
                 // 包装器参数无法直接拿到，由各用例用专门 mock 覆盖；默认空

@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -505,11 +504,11 @@ public class RoomActivityServiceImpl implements RoomActivityService {
 
     /**
      * 批量推进所有未结束活动：刷新后接待室状态、设备归属、活动列表保持一致。
+     * 查询不带 status 条件（已结束由 refreshOne 跳过），
+     * 避免与进行中占用查询混淆，保证到期活动状态及时推进。
      */
     private void refreshExpired(LocalDateTime now) {
-        LambdaQueryWrapper<RoomActivity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.ne(RoomActivity::getStatus, RoomActivity.STATUS_ENDED);
-        List<RoomActivity> actives = activityMapper.selectList(wrapper);
+        List<RoomActivity> actives = activityMapper.selectList(new LambdaQueryWrapper<>());
         for (RoomActivity activity : actives) {
             refreshOne(activity, now);
         }
@@ -547,10 +546,11 @@ public class RoomActivityServiceImpl implements RoomActivityService {
             return Collections.emptyMap();
         }
 
-        Set<Long> activityIds = rows.stream()
+        List<Long> activityIds = rows.stream()
                 .map(RoomActivityDevice::getActivityId)
                 .filter(id -> !Objects.equals(id, excludeActivityId))
-                .collect(Collectors.toSet());
+                .distinct()
+                .collect(Collectors.toList());
         if (activityIds.isEmpty()) {
             return Collections.emptyMap();
         }
