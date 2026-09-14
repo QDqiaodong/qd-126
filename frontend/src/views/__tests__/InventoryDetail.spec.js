@@ -107,6 +107,43 @@ describe('InventoryDetail 盘点工作台', () => {
     expect(inventoryApi.checkItem).toHaveBeenCalledWith('7', 1, { checkResult: 1, remark: '' })
   })
 
+  it('盘点中可直接关闭，关闭后批次结束且未盘设备不再有盘点中操作', async () => {
+    inventoryApi.getBatch
+      .mockResolvedValueOnce(makeBatch({ status: 0, checkedCount: 1, totalCount: 2, progressPercent: 50 }))
+      .mockResolvedValue(makeBatch({
+        status: 2,
+        statusText: '已关闭',
+        checkedCount: 1,
+        presentCount: 1,
+        totalCount: 2,
+        progressPercent: 50
+      }))
+    inventoryApi.getItems.mockResolvedValue([
+      makeItem(1, { checkResult: 1, checkResultText: '在场' }),
+      makeItem(2)
+    ])
+    inventoryApi.closeBatch.mockResolvedValue(makeBatch({ status: 2, statusText: '已关闭' }))
+
+    const wrapper = await mountRoute()
+    await flushPromises()
+
+    // 盘点中同时提供提交与关闭入口
+    expect(wrapper.text()).toContain('提交盘点')
+    expect(wrapper.text()).toContain('关闭批次')
+
+    // 直接走关闭处理（popconfirm 气泡在 jsdom 下不渲染）
+    await wrapper.vm.handleClose()
+    await flushPromises()
+
+    expect(inventoryApi.closeBatch).toHaveBeenCalledWith('7')
+
+    // 关闭后只读：不再有提交/盘点单选，未盘设备仍展示为未盘点
+    expect(wrapper.text()).toContain('批次已关闭，只读')
+    expect(wrapper.text()).not.toContain('提交盘点')
+    expect(wrapper.findAll('input[type=radio]')).toHaveLength(0)
+    expect(wrapper.text()).toContain('未盘点')
+  })
+
   it('已关闭批次不展示提交按钮与差异处理操作', async () => {
     inventoryApi.getBatch.mockResolvedValue(makeBatch({
       status: 2,

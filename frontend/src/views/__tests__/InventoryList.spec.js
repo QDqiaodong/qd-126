@@ -3,6 +3,11 @@ import ElementPlus from 'element-plus'
 import InventoryList from '../InventoryList.vue'
 import { inventoryApi, floorApi } from '../../api'
 
+vi.mock('element-plus', async () => {
+  const actual = await vi.importActual('element-plus')
+  return { ...actual, ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) } }
+})
+
 vi.mock('../../api', () => ({
   inventoryApi: {
     getBatches: vi.fn(),
@@ -75,6 +80,27 @@ describe('InventoryList 盘点批次列表', () => {
     expect(wrapper.find('.el-pagination__total').text()).toContain('23')
     // 已提交且有待处理差异时展示待处理标记
     expect(wrapper.text()).toContain('待处理')
+  })
+
+  it('盘点中与已提交批次均提供关闭入口，已关闭不提供', async () => {
+    inventoryApi.getBatches.mockResolvedValue(pageResult([
+      makeBatch(1, { status: 0 }),
+      makeBatch(2, { status: 1, statusText: '已提交' }),
+      makeBatch(3, { status: 2, statusText: '已关闭' })
+    ], 3))
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const rows = wrapper.findAll('.el-table__row')
+    const countClose = (row) => row.findAll('button').filter(b => b.text().includes('关闭')).length
+    expect(countClose(rows[0])).toBe(1)
+    expect(countClose(rows[1])).toBe(1)
+    expect(countClose(rows[2])).toBe(0)
+
+    // 盘点中关闭直接结束批次（跳过确认框）
+    await wrapper.vm.handleClose({ id: 1, batchName: '批次1', status: 0 })
+    expect(inventoryApi.closeBatch).toHaveBeenCalledWith(1)
   })
 
   it('按状态与名称搜索时重置到第一页并透传查询参数', async () => {

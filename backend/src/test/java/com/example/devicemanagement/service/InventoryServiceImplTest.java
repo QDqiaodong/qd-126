@@ -376,10 +376,40 @@ class InventoryServiceImplTest {
     }
 
     @Test
-    void closeOnlyAllowedForSubmittedBatch() {
+    void closeAllowedDirectlyFromCountingAndReleasesUncheckedDevices() {
         InventoryBatchVO created = inventoryService.createBatch(floorRequest());
-        // 盘点中不可关闭
-        assertThrows(IllegalArgumentException.class, () -> inventoryService.closeBatch(created.getId()));
+        Long batchId = created.getId();
+
+        // 仅盘点第一台，第二台保持未盘
+        InventoryItemCheckRequest present = new InventoryItemCheckRequest();
+        present.setCheckResult(InventoryItem.RESULT_PRESENT);
+        inventoryService.checkItem(batchId, insertedItems.get(0).getId(), present);
+
+        Device unchecked = floorDevices.get(1);
+        Long floorBefore = unchecked.getCurrentFloorId();
+        Long roomBefore = unchecked.getCurrentRoomId();
+        Integer statusBefore = unchecked.getStatus();
+
+        // 盘点中可直接关闭，批次结束
+        InventoryBatchVO closed = inventoryService.closeBatch(batchId);
+        assertEquals(InventoryBatch.STATUS_CLOSED, closed.getStatus());
+        assertNotNull(capturedBatch.getClosedAt());
+
+        // 未盘设备台账不被盘点流程改动：仍在原房间、状态正常（在库可调配）
+        assertEquals(floorBefore, unchecked.getCurrentFloorId());
+        assertEquals(roomBefore, unchecked.getCurrentRoomId());
+        assertEquals(statusBefore, unchecked.getStatus());
+        assertNull(insertedItems.get(1).getCheckResult());
+        assertNull(insertedItems.get(1).getProcessStatus());
+
+        // 关闭后所有修改仍被拒绝
+        InventoryItemCheckRequest checkReq = new InventoryItemCheckRequest();
+        checkReq.setCheckResult(InventoryItem.RESULT_PRESENT);
+        assertThrows(IllegalArgumentException.class,
+                () -> inventoryService.checkItem(batchId, insertedItems.get(1).getId(), checkReq));
+
+        // 重复关闭被拒绝
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.closeBatch(batchId));
     }
 
     private void markAll(int result) {

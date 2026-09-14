@@ -19,6 +19,16 @@
         <div class="batch-actions">
           <template v-if="batch.status === 0">
             <el-button type="primary" @click="handleSubmit">提交盘点</el-button>
+            <el-popconfirm
+              title="直接关闭后批次结束，未盘设备将回到在库可调配，且不可再修改。确定关闭吗？"
+              confirm-button-text="确定关闭"
+              cancel-button-text="取消"
+              width="280"
+              @confirm="handleClose">
+              <template #reference>
+                <el-button type="warning">关闭批次</el-button>
+              </template>
+            </el-popconfirm>
           </template>
           <template v-else-if="batch.status === 1">
             <el-popconfirm
@@ -368,7 +378,8 @@ const handleClose = async () => {
   try {
     await inventoryApi.closeBatch(batchId)
     ElMessage.success('批次已关闭')
-    await loadBatch()
+    activeTab.value = 'all'
+    await Promise.all([loadBatch(), loadItems()])
   } catch (error) {
     ElMessage.error(error.message || '关闭失败')
   }

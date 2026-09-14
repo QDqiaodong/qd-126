@@ -60,7 +60,7 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button @click="goDetail(row.id)" size="small" type="primary">工作台</el-button>
-            <el-button v-if="row.status === 1" @click="handleClose(row)" size="small" type="warning">关闭</el-button>
+            <el-button v-if="row.status !== 2" @click="handleClose(row)" size="small" type="warning">关闭</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -233,12 +233,15 @@ const confirmCreate = async () => {
 }
 
 const handleClose = async (row) => {
+  const tip = row.status === 0
+    ? `确定关闭批次「${row.batchName}」吗？关闭后批次结束，未盘设备将回到在库可调配，且不可再修改。`
+    : `确定关闭批次「${row.batchName}」吗？关闭后将不可再修改。`
   try {
-    await ElMessageBox.confirm(
-      `确定关闭批次「${row.batchName}」吗？关闭后将不可再修改。`,
-      '关闭批次',
-      { type: 'warning', confirmButtonText: '确定关闭', cancelButtonText: '取消' }
-    )
+    await ElMessageBox.confirm(tip, '关闭批次', {
+      type: 'warning',
+      confirmButtonText: '确定关闭',
+      cancelButtonText: '取消'
+    })
   } catch (e) {
     return
   }

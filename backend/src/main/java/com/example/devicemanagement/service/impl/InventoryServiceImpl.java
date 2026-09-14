@@ -392,9 +392,8 @@ public class InventoryServiceImpl implements InventoryService {
         if (batch.getStatus() == InventoryBatch.STATUS_CLOSED) {
             throw new IllegalArgumentException("批次已关闭，不可重复关闭");
         }
-        if (batch.getStatus() != InventoryBatch.STATUS_SUBMITTED) {
-            throw new IllegalArgumentException("盘点中的批次需提交后才能关闭");
-        }
+        // 盘点中允许直接关闭以提前结束批次：未盘设备不做任何台账变更，
+        // 回到正常在库、可调配状态；已盘结果原样保留为只读记录。
         batch.setStatus(InventoryBatch.STATUS_CLOSED);
         batch.setClosedAt(LocalDateTime.now());
         batchMapper.updateById(batch);
